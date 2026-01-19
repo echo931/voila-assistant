@@ -12,8 +12,10 @@ Liste des tâches détaillées pour le développement.
 | 2 | Recherche | ✅ Complété |
 | 3 | Panier | ✅ Complété |
 | 4 | Authentification | ⏸️ Différé (fonctionne sans compte) |
-| 5 | Telegram/Clawdbot | 🚧 En cours |
-| 6 | Polish | 📋 Planifié |
+| 5 | CLI + Skill | ✅ Complété |
+| 6 | Polish | 📋 Optionnel |
+
+**MVP atteint le 2026-01-19** - Fonctionnalités de base opérationnelles.
 
 ---
 
@@ -109,20 +111,19 @@ Liste des tâches détaillées pour le développement.
 
 ---
 
-## Phase 5: Intégration Telegram 📋
+## Phase 5: CLI + Skill Clawdbot ✅
 
-### 5.1 Module Telegram (`src/telegram.py`)
-- [ ] Handler pour commandes `/voila`
-- [ ] Sous-commande `recherche <terme>`
-- [ ] Sous-commande `ajouter <produit>`
-- [ ] Sous-commande `panier`
-- [ ] Sous-commande `vider`
-- [ ] Formatage des réponses
+### 5.1 CLI unifié (`src/cli.py`) ✅
+- [x] Commande `search <terme>` avec formats table/telegram/json
+- [x] Commande `cart` pour afficher le panier
+- [x] Commande `add <terme>` pour ajouter au panier
+- [x] Commande `clear` pour vider le panier
+- [x] Script wrapper `./voila`
 
-### 5.2 Intégration Clawdbot
-- [ ] Créer skill Clawdbot pour Voilà
-- [ ] Documenter les commandes
-- [ ] Tester end-to-end
+### 5.2 Skill Clawdbot (`skill/`) ✅
+- [x] SKILL.md avec documentation CLI
+- [x] voila-telegram.sh wrapper script
+- [x] Exemples de workflows
 
 ---
 
