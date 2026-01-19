@@ -10,9 +10,9 @@ Liste des tâches détaillées pour le développement.
 |-------|-------------|--------|
 | 1 | Infrastructure | ✅ Complété |
 | 2 | Recherche | ✅ Complété |
-| 3 | Panier | 🚧 En cours (base fonctionnelle) |
-| 4 | Authentification | 📋 Planifié |
-| 5 | Telegram | 📋 Planifié |
+| 3 | Panier | ✅ Complété |
+| 4 | Authentification | ⏸️ Différé (fonctionne sans compte) |
+| 5 | Telegram/Clawdbot | 🚧 En cours |
 | 6 | Polish | 📋 Planifié |
 
 ---
@@ -73,11 +73,11 @@ Liste des tâches détaillées pour le développement.
 - [x] Sauvegarde/chargement cookies de session
 - [x] CLI pour tests
 
-### 3.2 Améliorations panier (à faire)
-- [ ] Méthode `remove_item(product_id)` - utiliser bouton "-" via quick cart panel
-- [ ] Méthode `update_quantity(product_id, quantity)` - utiliser boutons "+/-"
-- [ ] Méthode `clear()` - itérer remove_item sur tous les articles
-- [x] **Résolution noms produits** ✅ - Cache via aria-labels + API REST
+### 3.2 Améliorations panier ✅
+- [x] Méthode `remove_item(product_id)` - via bouton "Decrease" du quick cart panel
+- [x] Méthode `clear()` - itère remove_item sur tous les articles
+- [x] **Résolution noms produits** - Cache via aria-labels + API REST
+- [ ] Méthode `update_quantity(product_id, quantity)` - utiliser boutons "+/-" (optionnel)
 
 ### 3.3 Tests API panier
 - [x] GET /api/cart/v1/carts/active fonctionne sans auth
