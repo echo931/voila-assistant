@@ -130,9 +130,9 @@ Liste des tâches détaillées pour le développement.
 ## Phase 6: Polish et robustesse 📋
 
 ### 6.1 Tests unitaires
-- [ ] Tests pour `search.py`
-- [ ] Tests pour `cart.py`
-- [ ] Tests pour `session.py`
+- [x] Tests pour `models.py` (7 tests, tous passent)
+- [ ] Tests pour `search.py` (nécessite mocks Playwright)
+- [ ] Tests pour `cart.py` (nécessite mocks Playwright)
 - [ ] Mocks pour les appels API
 
 ### 6.2 Gestion d'erreurs robuste
