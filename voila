@@ -1,0 +1,5 @@
+#!/bin/bash
+# Voilà Assistant CLI wrapper
+cd "$(dirname "$0")"
+source venv/bin/activate
+python -m src.cli "$@"
