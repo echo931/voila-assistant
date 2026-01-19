@@ -1,73 +1,15 @@
 # Voilà Assistant
 
-Assistant IA pour commander sur Voilà.ca (IGA)
+Assistant pour les commandes d'épicerie sur [Voilà.ca](https://voila.ca) (IGA en ligne).
 
-## Status
+## Status: MVP Fonctionnel ✅
 
-🚧 **En développement**
+## Fonctionnalités
 
-## Fonctionnalités prévues
-
-- [x] Recherche de produits
-- [ ] Gestion du panier (ajout/suppression)
-- [ ] Authentification
-- [ ] Récapitulatif de commande
-- [ ] Intégration Telegram
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Voilà Assistant                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │   Telegram   │◄──►│    Core      │◄──►│   Voilà      │  │
-│  │   Interface  │    │   Logic      │    │   Client     │  │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│                             │                    │          │
-│                             ▼                    ▼          │
-│                      ┌──────────────┐    ┌──────────────┐  │
-│                      │   Session    │    │   Browser    │  │
-│                      │   Manager    │    │   (Fallback) │  │
-│                      └──────────────┘    └──────────────┘  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Structure du projet
-
-```
-voila-assistant/
-├── README.md              # Ce fichier
-├── TODO.md                # Tâches détaillées
-├── ARCHITECTURE.md        # Design détaillé
-├── AGENTS.md              # Instructions pour agents IA
-│
-├── src/                   # Code source
-│   ├── __init__.py
-│   ├── client.py          # Client API Voilà
-│   ├── search.py          # Recherche de produits
-│   ├── cart.py            # Gestion du panier
-│   ├── auth.py            # Authentification
-│   ├── session.py         # Gestion des sessions/cookies
-│   └── telegram.py        # Intégration Telegram
-│
-├── tests/                 # Tests unitaires
-│   ├── test_search.py
-│   ├── test_cart.py
-│   └── test_auth.py
-│
-├── docs/                  # Documentation
-│   ├── api-reference.md   # Endpoints découverts
-│   └── setup.md           # Guide d'installation
-│
-├── scripts/               # Scripts utilitaires
-│   └── export-cookies.js  # Export cookies browser
-│
-├── requirements.txt       # Dépendances Python
-└── .env.example           # Template configuration
-```
+- 🔍 **Recherche** de produits avec prix et détails
+- 🛒 **Panier** - ajouter, supprimer, vider
+- 📊 **Formats** - table, telegram (HTML), json
+- 💾 **Session** persistante via cookies
 
 ## Installation
 
@@ -79,33 +21,50 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
-## Usage
+## Utilisation
 
 ```bash
 # Recherche
-python -m src.search "lait 2%"
+./voila search "lait 2%" -n 5
+./voila search "bananes" -f telegram
 
-# Voir le panier
-python -m src.cart show
-
-# Ajouter au panier
-python -m src.cart add <product_id> --quantity 2
+# Panier
+./voila cart
+./voila add "pain blanc"
+./voila add "fromage" -i 2 -q 3  # 3x le 3ème résultat
+./voila clear
 ```
 
-## Configuration
+## Architecture
 
-Copier `.env.example` vers `.env` et configurer:
-
-```bash
-VOILA_SESSION_FILE=~/.secrets/voila-session.json
-TELEGRAM_ENABLED=false
+```
+src/
+├── cli.py        # CLI unifié
+├── search.py     # Recherche produits (Playwright)
+├── cart.py       # Gestion panier (Playwright + REST API)
+├── models.py     # Product, CartItem, Cart
+├── client.py     # HTTP client avec retry
+└── exceptions.py # Exceptions personnalisées
 ```
 
-## Contribution
+## Comment ça marche
 
-Ce projet est conçu pour être développé avec l'aide d'agents IA.
-Voir `AGENTS.md` pour les instructions.
+1. **Recherche**: Playwright charge la page de recherche Voilà.ca et extrait les produits depuis `window.__INITIAL_STATE__`
+2. **Panier**: 
+   - Lecture via REST API (`/api/cart/v1/carts/active`)
+   - Ajout via clics automatisés sur les boutons "Add to basket"
+   - Suppression via boutons "Decrease quantity" dans le quick cart panel
+3. **Cache noms**: Les noms de produits sont extraits des `aria-label` des boutons et cachés localement
 
-## Licence
+## Limitations
 
-Projet personnel - Usage privé uniquement
+- Pas d'authentification (checkout impossible)
+- Session panier liée aux cookies (`~/.voila-session.json`)
+- Chaque commande lance un browser headless (~15-30s)
+- Minimum commande: 35$ CAD
+
+## Voir aussi
+
+- [TODO.md](TODO.md) - Tâches et progression
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Design détaillé
+- [skill/SKILL.md](skill/SKILL.md) - Documentation Clawdbot
