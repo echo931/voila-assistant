@@ -73,17 +73,15 @@ class ProductSearch:
                         
                         for (const [id, product] of Object.entries(entities)) {
                             if (product && product.name && product.price) {
+                                // Pass the full nested structure for from_api_response
                                 products.push({
                                     id: id,
                                     name: product.name,
                                     brand: product.brand || null,
-                                    size: product.size ? product.size.value : null,
-                                    price: product.price.current ? product.price.current.amount : null,
-                                    currency: product.price.current ? product.price.current.currency : "CAD",
-                                    unit_price: product.price.unit && product.price.unit.current ? product.price.unit.current.amount : null,
-                                    unit_label: product.price.unit ? product.price.unit.label : null,
-                                    available: product.status === "AVAILABLE",
-                                    category: product.department || null,
+                                    size: product.size || null,
+                                    price: product.price || {},
+                                    status: product.status || "AVAILABLE",
+                                    department: product.department || null,
                                     images: product.images || []
                                 });
                             }
