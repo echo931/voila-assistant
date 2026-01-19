@@ -11,6 +11,8 @@ from decimal import Decimal
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
 from playwright._impl._errors import TimeoutError as PlaywrightTimeout
 
+import requests
+
 from .models import Product, Cart, CartItem
 from .exceptions import VoilaCartError, VoilaBrowserError, VoilaProductNotFound
 
@@ -43,6 +45,9 @@ class CartManager:
         self._context: Optional[BrowserContext] = None
         self._page: Optional[Page] = None
         self._playwright = None
+        
+        # Cache local pour les noms de produits (productId -> productName)
+        self._product_name_cache: dict = {}
     
     def _ensure_browser(self):
         """S'assure que le browser est démarré"""
@@ -63,24 +68,39 @@ class CartManager:
         
         try:
             with open(self.session_file) as f:
-                cookies = json.load(f)
+                data = json.load(f)
+            
+            # Support old format (list of cookies) and new format (dict with cookies + cache)
+            if isinstance(data, list):
+                cookies = data
+            else:
+                cookies = data.get('cookies', [])
+                self._product_name_cache = data.get('product_cache', {})
+            
             self._context.add_cookies(cookies)
         except Exception:
-            pass  # Ignore cookie loading errors
+            pass  # Ignore loading errors
     
     def _save_cookies(self):
-        """Sauvegarde les cookies vers le fichier de session"""
+        """Sauvegarde les cookies et le cache produits vers le fichier de session"""
         if not self.session_file:
             return
         
         try:
             self.session_file.parent.mkdir(parents=True, exist_ok=True)
             cookies = self._context.cookies()
+            
+            # Save both cookies and product name cache
+            data = {
+                'cookies': cookies,
+                'product_cache': self._product_name_cache
+            }
+            
             with open(self.session_file, 'w') as f:
-                json.dump(cookies, f, indent=2)
+                json.dump(data, f, indent=2)
             self.session_file.chmod(0o600)
         except Exception:
-            pass  # Ignore cookie saving errors
+            pass  # Ignore saving errors
     
     def _navigate_to_search(self, query: str = ""):
         """Navigate vers une page qui a le panier initialisé"""
@@ -90,6 +110,70 @@ class CartManager:
         except PlaywrightTimeout:
             pass  # Continue anyway
         self._page.wait_for_timeout(2000)
+    
+    def _get_cart_via_api(self) -> dict:
+        """Récupère le panier via l'API REST (plus fiable que __INITIAL_STATE__)"""
+        try:
+            # Récupérer les cookies du browser pour l'API
+            cookies = {c['name']: c['value'] for c in self._context.cookies()}
+            
+            resp = requests.get(
+                f"{self.BASE_URL}/api/cart/v1/carts/active",
+                cookies=cookies,
+                headers={
+                    'User-Agent': self.DEFAULT_USER_AGENT,
+                    'Accept': 'application/json',
+                },
+                timeout=10
+            )
+            
+            if resp.status_code == 200:
+                return resp.json()
+            return {}
+        except Exception:
+            return {}
+    
+    def _build_cart_from_api(self, api_data: dict) -> Cart:
+        """Construit un objet Cart depuis la réponse API"""
+        items = []
+        for item in api_data.get('items', []):
+            try:
+                product_id = item.get('productId', '')
+                qty = item.get('quantity', {})
+                if isinstance(qty, dict):
+                    qty = qty.get('quantityInBasket', 1)
+                
+                prices = item.get('totalPrices', {})
+                unit_price = Decimal(str(prices.get('finalUnitPrice', {}).get('amount', '0')))
+                total_price = Decimal(str(prices.get('finalPrice', {}).get('amount', '0')))
+                
+                # Utiliser le cache pour le nom
+                product_name = self._product_name_cache.get(product_id, product_id[:12] + '...')
+                
+                cart_item = CartItem(
+                    product_id=product_id,
+                    product_name=product_name,
+                    quantity=int(qty),
+                    unit_price=unit_price,
+                    total_price=total_price
+                )
+                items.append(cart_item)
+            except Exception:
+                continue
+        
+        totals = api_data.get('totals', {})
+        subtotal = Decimal(str(totals.get('itemPriceAfterPromos', {}).get('amount', '0')))
+        
+        checkout_group = api_data.get('defaultCheckoutGroup', {})
+        threshold = checkout_group.get('minimumCheckoutThreshold', {})
+        
+        return Cart(
+            id=api_data.get('cartId', ''),
+            items=items,
+            subtotal=subtotal,
+            currency='CAD',
+            minimum_threshold=Decimal(str(threshold.get('amount', '35.00')))
+        )
     
     def _get_cart_state(self) -> dict:
         """Extrait l'état du panier depuis __INITIAL_STATE__"""
@@ -135,7 +219,7 @@ class CartManager:
         Récupère le panier actif.
         
         Args:
-            force_refresh: Force la navigation vers la page panier pour avoir les noms
+            force_refresh: Non utilisé (gardé pour compatibilité)
         
         Returns:
             Objet Cart avec les articles actuels
@@ -146,52 +230,21 @@ class CartManager:
         try:
             self._ensure_browser()
             
-            # Naviguer vers la page panier pour avoir les noms des produits
-            if self._page.url == "about:blank" or force_refresh or "/cart" not in self._page.url:
+            # Naviguer vers une page si pas encore fait (pour initialiser les cookies)
+            if self._page.url == "about:blank":
                 try:
-                    self._page.goto(f"{self.BASE_URL}/cart", wait_until="domcontentloaded", timeout=self.timeout)
+                    self._page.goto(self.BASE_URL, wait_until="domcontentloaded", timeout=self.timeout)
                 except PlaywrightTimeout:
                     pass
-                self._page.wait_for_timeout(2000)
+                self._page.wait_for_timeout(1000)
             
-            state = self._get_cart_state()
+            # Utiliser l'API REST pour récupérer le panier (plus fiable)
+            api_data = self._get_cart_via_api()
             
-            if "error" in state:
+            if not api_data:
                 return Cart(id="", items=[], subtotal=Decimal('0'))
             
-            # Convertir les items
-            items = []
-            for item in state.get('items', []):
-                try:
-                    qty = item.get('quantity', 1)
-                    if isinstance(qty, dict):
-                        qty = qty.get('quantityInBasket', 1)
-                    
-                    cart_item = CartItem(
-                        product_id=item.get('productId', ''),
-                        product_name=item.get('productName', item.get('productId', '')),
-                        quantity=int(qty),
-                        unit_price=Decimal(str(item.get('unitPrice', '0'))),
-                        total_price=Decimal(str(item.get('totalPrice', '0')))
-                    )
-                    items.append(cart_item)
-                except Exception:
-                    continue
-            
-            # Calculer le sous-total
-            totals = state.get('totals', {})
-            subtotal_data = totals.get('itemPriceAfterPromos', totals.get('itemsRetailPrice', {}))
-            subtotal = Decimal(str(subtotal_data.get('amount', '0')))
-            
-            threshold = state.get('minimumCheckoutThreshold', {})
-            
-            return Cart(
-                id=state.get('cartId', ''),
-                items=items,
-                subtotal=subtotal,
-                currency=subtotal_data.get('currency', 'CAD'),
-                minimum_threshold=Decimal(str(threshold.get('amount', '35.00')))
-            )
+            return self._build_cart_from_api(api_data)
             
         except Exception as e:
             raise VoilaBrowserError(f"Erreur récupération panier: {e}")
@@ -297,9 +350,16 @@ class CartManager:
             
             button = add_buttons[product_index]
             
-            # Récupérer le nom du produit depuis l'aria-label pour le log
+            # Récupérer le nom du produit depuis l'aria-label
             aria_label = button.get_attribute('aria-label') or ""
             product_name = aria_label.replace("Add ", "").replace(" to basket", "").replace("Ajouter ", "").replace(" au panier", "")
+            
+            # Récupérer l'ID du produit pour le cache
+            # On va le chercher dans le state après l'ajout
+            
+            # Capturer les IDs du panier avant l'ajout via API REST
+            cart_before = self._get_cart_via_api()
+            ids_before = set(item.get('productId', '') for item in cart_before.get('items', []))
             
             # Cliquer pour ajouter
             for i in range(quantity):
@@ -307,13 +367,20 @@ class CartManager:
                 self._page.wait_for_timeout(800)
             
             self._page.wait_for_timeout(1500)
+            
+            # Capturer les IDs après l'ajout via API REST
+            cart_after = self._get_cart_via_api()
+            ids_after = set(item.get('productId', '') for item in cart_after.get('items', []))
+            
+            # Le nouveau produit est celui qui n'était pas là avant
+            new_ids = ids_after - ids_before
+            if new_ids and product_name:
+                for new_id in new_ids:
+                    self._product_name_cache[new_id] = product_name
+            
             self._save_cookies()
             
-            # Rafraîchir l'état du panier
-            self._page.reload()
-            self._page.wait_for_timeout(2000)
-            
-            return self.get_cart()
+            return self._build_cart_from_api(cart_after)
             
         except VoilaCartError:
             raise
