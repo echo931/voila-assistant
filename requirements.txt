@@ -1,0 +1,21 @@
+# Voilà Assistant - Dépendances Python
+
+# HTTP client
+requests>=2.31.0
+
+# Browser automation
+playwright>=1.40.0
+
+# Data handling
+pydantic>=2.5.0
+
+# Environment
+python-dotenv>=1.0.0
+
+# Dev/Test
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+
+# Type checking
+mypy>=1.7.0
