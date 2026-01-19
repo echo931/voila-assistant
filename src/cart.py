@@ -389,7 +389,7 @@ class CartManager:
     
     def remove_item(self, product_id: str) -> Cart:
         """
-        Supprime un produit du panier.
+        Supprime un produit du panier via le quick cart panel.
         
         Args:
             product_id: ID du produit à supprimer
@@ -400,29 +400,64 @@ class CartManager:
         try:
             self._ensure_browser()
             
-            # Naviguer vers le panier
-            self._page.goto(f"{self.BASE_URL}/cart", wait_until="domcontentloaded", timeout=self.timeout)
-            self._page.wait_for_timeout(2000)
+            # Aller sur la page d'accueil pour avoir accès au quick cart
+            if "voila.ca" not in self._page.url:
+                try:
+                    self._page.goto(self.BASE_URL, wait_until="domcontentloaded", timeout=self.timeout)
+                except PlaywrightTimeout:
+                    pass
+                self._page.wait_for_timeout(2000)
             
-            # Chercher le produit et son bouton de suppression
-            remove_button = self._page.query_selector(f'[data-product-id="{product_id}"] button[aria-label*="Remove"], [data-product-id="{product_id}"] button[aria-label*="Supprimer"]')
+            # Ouvrir le quick cart panel
+            cart_button = self._page.query_selector('button[aria-label*="Cart"]')
+            if cart_button:
+                cart_button.click()
+                self._page.wait_for_timeout(1500)
             
-            if not remove_button:
-                # Chercher par autre moyen
-                cart_items = self._page.query_selector_all('[data-testid="cart-item"], .cart-item')
-                for item in cart_items:
-                    item_id = item.get_attribute('data-product-id')
-                    if item_id == product_id:
-                        remove_btn = item.query_selector('button[aria-label*="Remove"], button[aria-label*="Supprimer"], [data-testid="remove-button"]')
-                        if remove_btn:
-                            remove_button = remove_btn
-                            break
+            # Trouver le produit par son nom (depuis le cache)
+            product_name = self._product_name_cache.get(product_id, '')
             
-            if remove_button:
-                remove_button.click()
-                self._page.wait_for_timeout(1000)
+            # Récupérer la quantité actuelle via API
+            cart_data = self._get_cart_via_api()
+            current_qty = 0
+            for item in cart_data.get('items', []):
+                if item.get('productId') == product_id:
+                    qty = item.get('quantity', {})
+                    current_qty = qty.get('quantityInBasket', 1) if isinstance(qty, dict) else qty
+                    break
             
+            if current_qty == 0:
+                return self.get_cart()
+            
+            # Chercher le bouton "Decrease" spécifique à ce produit via aria-label
+            # Format: "Decrease quantity of {product_name} in cart"
+            selector = None
+            if product_name:
+                # Échapper les caractères spéciaux pour le sélecteur
+                escaped_name = product_name.replace('"', '\\"')
+                selector = f'button[aria-label*="Decrease quantity of {escaped_name}"]'
+            
+            # Cliquer sur "-" jusqu'à supprimer l'article
+            for _ in range(current_qty):
+                if selector:
+                    minus_button = self._page.query_selector(selector)
+                else:
+                    # Fallback: premier bouton decrease
+                    minus_button = self._page.query_selector('button[aria-label*="Decrease quantity"]')
+                
+                if minus_button:
+                    minus_button.click()
+                    self._page.wait_for_timeout(800)
+                else:
+                    break
+            
+            self._page.wait_for_timeout(1000)
             self._save_cookies()
+            
+            # Retirer du cache
+            if product_id in self._product_name_cache:
+                del self._product_name_cache[product_id]
+            
             return self.get_cart()
             
         except Exception as e:
@@ -467,35 +502,23 @@ class CartManager:
     
     def clear(self) -> Cart:
         """
-        Vide le panier.
+        Vide le panier en supprimant tous les articles.
         
         Returns:
             Panier vide
         """
         try:
-            self._ensure_browser()
+            # Récupérer les articles actuels
+            cart = self.get_cart()
             
-            # Naviguer vers le panier
-            self._page.goto(f"{self.BASE_URL}/cart", wait_until="domcontentloaded", timeout=self.timeout)
-            self._page.wait_for_timeout(2000)
+            # Supprimer chaque article
+            for item in cart.items:
+                self.remove_item(item.product_id)
             
-            # Chercher le bouton "Vider le panier"
-            clear_button = self._page.query_selector('button:has-text("Clear"), button:has-text("Vider"), [data-testid="clear-cart"]')
-            
-            if clear_button:
-                clear_button.click()
-                # Confirmer si dialog
-                confirm = self._page.query_selector('button:has-text("Confirm"), button:has-text("Yes"), button:has-text("Oui")')
-                if confirm:
-                    confirm.click()
-                self._page.wait_for_timeout(1000)
-            else:
-                # Supprimer un par un
-                cart = self.get_cart()
-                for item in cart.items:
-                    self.remove_item(item.product_id)
-            
+            # Vider le cache
+            self._product_name_cache.clear()
             self._save_cookies()
+            
             return self.get_cart()
             
         except Exception as e:

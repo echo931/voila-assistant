@@ -74,13 +74,10 @@ Liste des tâches détaillées pour le développement.
 - [x] CLI pour tests
 
 ### 3.2 Améliorations panier (à faire)
-- [ ] Méthode `remove_item(product_id)` - tester et valider
-- [ ] Méthode `update_quantity(product_id, quantity)` - tester
-- [ ] Méthode `clear()` - tester
-- [ ] **Résolution noms produits** - actuellement affiche les IDs
-  - Option A: Cache local des produits ajoutés
-  - Option B: Recherche par ID quand nécessaire
-  - Option C: Parser le HTML du panier après render React
+- [ ] Méthode `remove_item(product_id)` - utiliser bouton "-" via quick cart panel
+- [ ] Méthode `update_quantity(product_id, quantity)` - utiliser boutons "+/-"
+- [ ] Méthode `clear()` - itérer remove_item sur tous les articles
+- [x] **Résolution noms produits** ✅ - Cache via aria-labels + API REST
 
 ### 3.3 Tests API panier
 - [x] GET /api/cart/v1/carts/active fonctionne sans auth
