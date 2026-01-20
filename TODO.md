@@ -11,181 +11,170 @@ Liste des tâches détaillées pour le développement.
 | 1 | Infrastructure | ✅ Complété |
 | 2 | Recherche | ✅ Complété |
 | 3 | Panier | ✅ Complété |
-| 4 | Authentification | ⏸️ Différé (fonctionne sans compte) |
-| 5 | CLI + Skill | ✅ Complété |
-| 6 | Polish | 📋 Optionnel |
+| 4 | Listes de courses | ✅ Complété |
+| 5 | Session persistante | ✅ Complété |
+| 6 | CLI + Skill | ✅ Complété |
+| 7 | Refresh automatique | 📋 À faire |
+| 8 | Notifications | 📋 À faire |
 
 **MVP atteint le 2026-01-19** - Fonctionnalités de base opérationnelles.
+**Listes ajoutées le 2026-01-20** - Support complet des listes de courses.
+**Session persistante le 2026-01-20** - Cookies convertis en persistants.
 
 ---
 
-## Phase 1: Infrastructure de base ✅
+## Phase 7: Refresh automatique de session 📋
 
-### 1.1 Setup environnement ✅
-- [x] Créer structure de répertoires
-- [x] Initialiser git
-- [x] Créer README.md
-- [x] Créer AGENTS.md
-- [x] Créer requirements.txt
-- [x] Setup venv dédié
-- [x] Configurer .gitignore
+### Objectif
+Maintenir la session active automatiquement pour éviter la ré-authentification manuelle.
 
-### 1.2 Module client HTTP (`src/client.py`) ✅
-- [x] Classe `VoilaClient` avec session requests
-- [x] Headers par défaut (User-Agent, Accept, etc.)
-- [x] Méthode pour charger/sauvegarder cookies
-- [x] Gestion des erreurs HTTP
-- [x] Retry automatique avec backoff
+### 7.1 Commande refresh améliorée ✅
+- [x] `./voila refresh` - rafraîchit manuellement les cookies
+- [x] Merge des nouveaux cookies avec existants
+- [x] Affichage du status post-refresh
 
-### 1.3 Module exceptions (`src/exceptions.py`) ✅
-- [x] `VoilaError` (base)
-- [x] `VoilaAPIError` (erreur API)
-- [x] `VoilaAuthError` (erreur auth)
-- [x] `VoilaSessionExpired` (session expirée)
-- [x] `VoilaProductNotFound` (produit introuvable)
-- [x] `VoilaBrowserError` (erreur browser)
-- [x] `VoilaCartError` (erreur panier)
+### 7.2 Cron job pour refresh automatique
+**Priorité: Haute** - Évite l'expiration de session sans intervention
 
----
+- [ ] Script `scripts/voila-refresh.sh` autonome
+  - Lance `./voila refresh`
+  - Log le résultat dans `~/.voila-refresh.log`
+  - Exit code 0 si succès, 1 si échec
+  
+- [ ] Documentation cron dans README
+  ```bash
+  # Refresh tous les 3 jours (avant expiration des 7 jours)
+  0 6 */3 * * /home/echo/projects/voila-assistant/scripts/voila-refresh.sh
+  ```
 
-## Phase 2: Recherche de produits ✅
+- [ ] Option `--quiet` pour refresh sans output (pour cron)
+  ```bash
+  ./voila refresh --quiet  # Retourne seulement exit code
+  ```
 
-### 2.1 Module recherche (`src/search.py`) ✅
-- [x] Classe `ProductSearch` avec Playwright
-- [x] Extraction données via `window.__INITIAL_STATE__`
-- [x] Méthode `search(query, max_results)`
-- [x] Méthode `search_formatted()` avec formats (table, telegram, json)
-- [x] CLI pour tests
-
-### 2.2 Modèle Product (`src/models.py`) ✅
-- [x] Dataclass `Product` avec tous les champs
-- [x] Méthode `from_api_response()`
-- [x] Méthode `to_dict()`
-- [x] Formatters (table, markdown, telegram)
-- [x] Dataclass `CartItem` et `Cart`
+### 7.3 Refresh intelligent (optionnel)
+- [ ] Refresh automatique avant chaque commande si session < 2 jours
+- [ ] Flag `--no-auto-refresh` pour désactiver
+- [ ] Cache le résultat pour éviter refresh multiple
 
 ---
 
-## Phase 3: Gestion du panier 🚧
+## Phase 8: Notifications d'expiration 📋
 
-### 3.1 Module panier (`src/cart.py`) ✅
-- [x] Classe `CartManager` avec Playwright
-- [x] Méthode `get_cart()` - récupérer panier actif
-- [x] Méthode `add_item_by_search(query, index, quantity)`
-- [x] Sauvegarde/chargement cookies de session
-- [x] CLI pour tests
+### Objectif
+Alerter l'utilisateur quand la session approche de l'expiration.
 
-### 3.2 Améliorations panier ✅
-- [x] Méthode `remove_item(product_id)` - via bouton "Decrease" du quick cart panel
-- [x] Méthode `clear()` - itère remove_item sur tous les articles
-- [x] **Résolution noms produits** - Cache via aria-labels + API REST
-- [ ] Méthode `update_quantity(product_id, quantity)` - utiliser boutons "+/-" (optionnel)
+### 8.1 Alertes dans le CLI
+**Priorité: Moyenne**
 
-### 3.3 Tests API panier
-- [x] GET /api/cart/v1/carts/active fonctionne sans auth
-- [x] POST add-items nécessite browser (anti-bot 403)
-- [x] Structure du panier documentée
+- [ ] Afficher warning si session < 3 jours dans toutes les commandes
+  ```
+  ⚠️ Session expire dans 2j - pensez à './voila refresh'
+  ```
+- [ ] Option `--no-warnings` pour désactiver
 
----
+### 8.2 Notifications via Clawdbot (optionnel)
+**Priorité: Basse** - Nécessite intégration Clawdbot
 
-## Phase 4: Authentification 📋
-
-### 4.1 Explorer le flow de login
-- [ ] Identifier l'endpoint de login
-- [ ] Documenter les champs requis
-- [ ] Identifier si CAPTCHA est présent
-- [ ] Documenter les cookies retournés
-
-### 4.2 Module session (`src/session.py`)
-- [ ] Classe `SessionManager`
-- [ ] Charger cookies depuis fichier JSON
-- [ ] Sauvegarder cookies vers fichier JSON
-- [ ] Vérifier validité de session
-- [ ] Refresh automatique si possible
-
-### 4.3 Module auth (`src/auth.py`)
-- [ ] Login via browser Playwright
-- [ ] Capturer les cookies post-login
-- [ ] Gérer CAPTCHA avec intervention humaine
-- [ ] Sauvegarder session
+- [ ] Heartbeat check de la session
+- [ ] Notification Telegram/Discord si session < 24h
+- [ ] Exemple de configuration HEARTBEAT.md
 
 ---
 
-## Phase 5: CLI + Skill Clawdbot ✅
+## Phase 9: Mode daemon (optionnel, basse priorité) 📋
 
-### 5.1 CLI unifié (`src/cli.py`) ✅
-- [x] Commande `search <terme>` avec formats table/telegram/json
-- [x] Commande `cart` pour afficher le panier
-- [x] Commande `add <terme>` pour ajouter au panier
-- [x] Commande `clear` pour vider le panier
-- [x] Script wrapper `./voila`
+### Objectif
+Réutiliser le browser entre commandes pour accélérer les opérations.
 
-### 5.2 Skill Clawdbot (`skill/`) ✅
-- [x] SKILL.md avec documentation CLI
-- [x] voila-telegram.sh wrapper script
-- [x] Exemples de workflows
+### ⚠️ Considérations
+- **RAM**: Chromium headless ~150-300MB permanent
+- **Complexité**: Gestion du cycle de vie du daemon
+- **Bénéfice**: ~15-20s économisés par commande
 
----
-
-## Phase 6: Polish et robustesse 📋
-
-### 6.1 Tests unitaires
-- [x] Tests pour `models.py` (7 tests, tous passent)
-- [ ] Tests pour `search.py` (nécessite mocks Playwright)
-- [ ] Tests pour `cart.py` (nécessite mocks Playwright)
-- [ ] Mocks pour les appels API
-
-### 6.2 Gestion d'erreurs robuste
-- [ ] Retry avec backoff exponentiel
-- [ ] Logging structuré
-- [ ] Alertes en cas d'erreur critique
-
-### 6.3 Documentation
-- [ ] Guide d'installation complet
-- [ ] Exemples d'utilisation
-- [ ] Troubleshooting
-
----
-
-## Découvertes techniques (2026-01-19)
-
-### Structure API Voilà
-- **Recherche:** Page `/search?q=...` avec données dans `window.__INITIAL_STATE__.data.products.productEntities`
-- **Panier (lecture):** `GET /api/cart/v1/carts/active` retourne le panier actif
-- **Panier (écriture):** Nécessite browser automation (403 via API directe)
-- **Seuil minimum:** $35.00 CAD pour checkout
-
-### Structure du panier
-```json
-{
-  "cartId": "uuid",
-  "items": [
-    {
-      "productId": "uuid",
-      "quantity": { "quantityInBasket": 1 },
-      "totalPrices": {
-        "regularPrice": { "currency": "CAD", "amount": "5.49" },
-        "finalPrice": { "currency": "CAD", "amount": "5.49" }
-      }
-    }
-  ],
-  "totals": {
-    "itemPriceAfterPromos": { "currency": "CAD", "amount": "10.98" }
-  }
-}
+### 9.1 Architecture proposée
+```
+voila-daemon (processus background)
+├── Browser Playwright partagé
+├── Socket UNIX pour communication
+└── Auto-shutdown après 30min inactivité
 ```
 
-### Boutons d'ajout au panier
-- Sélecteur: `button[aria-label*="to basket"]`
-- Format aria-label: "Add {Product Name} to basket"
+### 9.2 Implémentation (si nécessaire)
+- [ ] `./voila daemon start` - démarre le daemon
+- [ ] `./voila daemon stop` - arrête le daemon
+- [ ] `./voila daemon status` - état du daemon
+- [ ] Fallback automatique si daemon non disponible
+- [ ] Timeout configurable pour auto-shutdown
+
+### 9.3 Décision
+**Reporter** - Le coût en RAM (~200MB) n'est probablement pas justifié.
+Le temps de démarrage (15-30s) est acceptable pour usage occasionnel.
+À reconsidérer si utilisation intensive.
 
 ---
 
-## Prochaine tâche
+## Tâches complétées récemment
 
-**→ 3.2 Améliorer la résolution des noms de produits dans le panier**
+### 2026-01-20: Listes de courses
+- [x] Module `src/lists.py` - ListsManager avec Playwright
+- [x] Extraction des listes via parsing HTML de `/lists`
+- [x] Extraction des produits via `__INITIAL_STATE__`
+- [x] Commande `./voila lists` - afficher toutes les listes
+- [x] Commande `./voila list <nom>` - contenu d'une liste
+- [x] Commande `./voila list <nom> --sales` - articles en solde
+- [x] Commande `./voila list-search <terme>` - recherche dans listes
+- [x] Commande `./voila list-add <nom>` - ajouter liste au panier
 
-Options à évaluer:
-1. Stocker les noms lors de l'ajout via `add_item_by_search()`
-2. Créer un cache local productId → productName
-3. Parser le HTML du panier (complexe, React)
+### 2026-01-20: Session persistante
+- [x] Module `src/session.py` - SessionManager amélioré
+- [x] Conversion session cookies → persistent (7 jours)
+- [x] Validation auth via Playwright + `__INITIAL_STATE__`
+- [x] Suivi expiration cookies critiques
+- [x] Commande `./voila status` améliorée
+- [x] Commande `./voila refresh` - renouveler cookies
+- [x] Commande `./voila import-cookies` améliorée
+
+---
+
+## Découvertes techniques
+
+### Structure API Voilà (2026-01-19)
+- **Recherche:** `/search?q=...` → `__INITIAL_STATE__.data.products.productEntities`
+- **Panier (lecture):** `GET /api/cart/v1/carts/active`
+- **Panier (écriture):** Browser automation (API retourne 403)
+- **Seuil minimum:** $35.00 CAD
+
+### Authentification (2026-01-20)
+- **SSO:** Gigya via `voila.login-seconnecter.ca`
+- **Protection:** Anti-bot bloque login headless
+- **Solution:** Import cookies depuis navigateur connecté
+- **Données customer:** `__INITIAL_STATE__.data.customer.details.data`
+- **Endpoint API customer:** N'existe pas (404 sur `/api/customer/v1/current`)
+
+### Listes (2026-01-20)
+- **URL:** `/lists` (toutes), `/lists/{uuid}` (une liste)
+- **Données:** Server-side rendered, pas d'API REST
+- **Extraction:** Parsing HTML + `__INITIAL_STATE__.data.products`
+- **Prix original:** `price.original.amount` (pas `price.was`)
+
+### Cookies critiques
+| Cookie | Durée | Rôle |
+|--------|-------|------|
+| `global_sid` | Session → 7j | Session ID |
+| `userId` | Session → 7j | User ID |
+| `VISITORID` | 1 an | Visitor tracking |
+| `userEmail` | Session → 7j | Email (si auth) |
+
+---
+
+## Prochaine tâche recommandée
+
+**→ Phase 7.2: Cron job pour refresh automatique**
+
+1. Créer `scripts/voila-refresh.sh`
+2. Ajouter option `--quiet` au refresh
+3. Documenter setup cron dans README
+4. Tester sur quelques jours
+
+Temps estimé: 30-45 minutes
