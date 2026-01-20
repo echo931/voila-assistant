@@ -144,30 +144,49 @@ def cmd_login(args):
 
 
 def cmd_status(args):
-    """Vérifie le statut de connexion"""
-    from .lists import ListsManager
+    """Vérifie le statut de connexion avec détails de session"""
+    from .session import SessionManager
     
-    with CartManager(headless=True, session_file=args.session) as cart_mgr:
-        browser_logged = cart_mgr.is_logged_in()
+    session_mgr = SessionManager(session_file=args.session)
+    info = session_mgr.get_session_info()
     
-    lists_mgr = ListsManager(session_file=args.session)
-    api_auth = lists_mgr.is_authenticated()
-    
-    if browser_logged or api_auth:
-        print("✅ Connecté")
-        if api_auth:
-            print("   • API listes: accessible")
-        else:
-            print("   • API listes: non accessible (re-login peut être nécessaire)")
+    # Affichage principal
+    if info['authenticated']:
+        name = info.get('customer_name') or info.get('email') or 'Utilisateur'
+        print(f"✅ Connecté en tant que {name}")
     else:
         print("❌ Non connecté (session anonyme)")
-        print("\n💡 Pour accéder aux listes, connectez-vous avec 'login' ou 'import-cookies'")
+    
+    # Détails de session
+    print(f"\n📊 Session:")
+    print(f"   • Cookies: {info['total_cookies']} total, {info['critical_cookies']} critiques")
+    
+    days = info.get('days_remaining')
+    if days is not None:
+        if days < 1:
+            print(f"   • ⚠️ Session expire dans moins de 24h! Utilisez 'refresh'")
+        elif days < 3:
+            print(f"   • ⚠️ Session expire dans {days}j - pensez à 'refresh'")
+        else:
+            print(f"   • Session valide: {days}j restants")
+    
+    if info.get('last_activity'):
+        print(f"   • Dernière activité: {info['last_activity'][:19]}")
+    
+    # Conseils
+    if not info['authenticated']:
+        print("\n💡 Pour accéder aux listes:")
+        print("   1. Connectez-vous sur voila.ca dans votre navigateur")
+        print("   2. Exportez vos cookies (extension EditThisCookie)")
+        print("   3. ./voila import-cookies ~/cookies.json")
     
     return 0
 
 
 def cmd_import_cookies(args):
     """Importe des cookies depuis un fichier JSON"""
+    from .session import SessionManager
+    
     import_path = Path(args.file).expanduser()
     
     if not import_path.exists():
@@ -175,53 +194,20 @@ def cmd_import_cookies(args):
         return 1
     
     try:
-        with open(import_path) as f:
-            imported = json.load(f)
+        session_mgr = SessionManager(session_file=args.session)
+        count, message = session_mgr.import_cookies(import_path)
         
-        # Detect format: could be list of cookies or dict with name:value
-        if isinstance(imported, list):
-            # Playwright format: [{name, value, domain, ...}, ...]
-            cookies = imported
-        elif isinstance(imported, dict):
-            if 'cookies' in imported:
-                cookies = imported['cookies']
-            else:
-                # Simple {name: value} format - convert
-                cookies = [{'name': k, 'value': v, 'domain': '.voila.ca'} for k, v in imported.items()]
+        print(f"✅ {message}", file=sys.stderr)
+        
+        # Valider la session
+        status = session_mgr.validate_session(force=True)
+        
+        if status.authenticated:
+            name = status.customer_name or status.email
+            print(f"✅ Session valide - connecté en tant que {name}", file=sys.stderr)
         else:
-            print("❌ Format de cookies non reconnu", file=sys.stderr)
-            return 1
-        
-        # Load existing session if present
-        session_path = Path(args.session).expanduser()
-        existing = {}
-        if session_path.exists():
-            try:
-                with open(session_path) as f:
-                    existing = json.load(f)
-            except:
-                existing = {}
-        
-        # Merge cookies
-        if isinstance(existing, dict):
-            existing['cookies'] = cookies
-        else:
-            existing = {'cookies': cookies, 'product_cache': {}}
-        
-        # Save
-        session_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(session_path, 'w') as f:
-            json.dump(existing, f, indent=2)
-        session_path.chmod(0o600)
-        
-        print(f"✅ {len(cookies)} cookies importés vers {session_path}", file=sys.stderr)
-        
-        # Test if it works
-        lists_mgr = ListsManager(session_file=session_path)
-        if lists_mgr.is_authenticated():
-            print("✅ Session valide - API listes accessible!", file=sys.stderr)
-        else:
-            print("⚠️ Session importée mais API listes non accessible", file=sys.stderr)
+            print("⚠️ Cookies importés mais session non authentifiée", file=sys.stderr)
+            print("   Les fonctionnalités de base fonctionneront.", file=sys.stderr)
         
         return 0
         
@@ -230,6 +216,40 @@ def cmd_import_cookies(args):
         return 1
     except Exception as e:
         print(f"❌ Erreur: {e}", file=sys.stderr)
+        return 1
+
+
+def cmd_refresh(args):
+    """Rafraîchit la session en accédant au site"""
+    from .session import SessionManager
+    
+    print("🔄 Rafraîchissement de la session...", file=sys.stderr)
+    
+    session_mgr = SessionManager(session_file=args.session)
+    
+    # Status avant
+    status_before = session_mgr.validate_session()
+    
+    # Refresh
+    if session_mgr.refresh_session():
+        # Status après
+        status_after = session_mgr.validate_session(force=True)
+        
+        print("✅ Session rafraîchie!", file=sys.stderr)
+        
+        if status_after.authenticated:
+            name = status_after.customer_name or status_after.email
+            print(f"   • Connecté: {name}", file=sys.stderr)
+        
+        # Afficher les cookies mis à jour
+        info = session_mgr.get_session_info()
+        print(f"   • Cookies: {info['total_cookies']}", file=sys.stderr)
+        if info.get('earliest_expiry'):
+            print(f"   • Prochaine expiration: {info['earliest_expiry'][:10]}", file=sys.stderr)
+        
+        return 0
+    else:
+        print("❌ Échec du rafraîchissement", file=sys.stderr)
         return 1
 
 
@@ -482,6 +502,10 @@ Exemples:
     list_add_parser.add_argument("name", help="Nom de la liste")
     list_add_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
     list_add_parser.set_defaults(func=cmd_list_add)
+    
+    # refresh
+    refresh_parser = subparsers.add_parser("refresh", help="Rafraîchit la session (renouvelle les cookies)")
+    refresh_parser.set_defaults(func=cmd_refresh)
     
     args = parser.parse_args()
     
