@@ -44,9 +44,10 @@ $ ./voila cart
 |---------|--------|-------------|
 | 🔍 **Search** | ✅ | Find products with prices, sizes, unit prices |
 | 🛒 **Cart** | ✅ | Add, remove, clear items |
+| 📋 **Lists** | ✅ | View lists, filter by sales, add to cart |
 | 📊 **Formats** | ✅ | Table, Telegram HTML, JSON output |
 | 💾 **Session** | ✅ | Persistent cookies across runs |
-| 🔐 **Auth** | ⏸️ | Login support (deferred - works without account) |
+| 🔐 **Auth** | ✅ | Import cookies from browser for lists |
 | 💳 **Checkout** | ⏸️ | Payment flow (requires auth) |
 
 ## How It Works
@@ -80,7 +81,27 @@ playwright install chromium
 ./voila add "lait 2%"                  # Add first search result
 ./voila add "pommes" -i 2 -q 3         # Add 3x the 2nd result
 ./voila clear                          # Empty cart
+
+# Lists (requires authentication)
+./voila lists                          # Show all shopping lists
+./voila list "Épicerie"                # Show list contents
+./voila list "Épicerie" --sales        # Show only items on sale
+./voila list-search "lait"             # Search across all lists
+./voila list-add "Épicerie"            # Add entire list to cart
+
+# Session management
+./voila status                         # Check authentication status
+./voila import-cookies cookies.json    # Import cookies from browser
 ```
+
+### Authentication for Lists
+
+Lists require authentication. Export cookies from your browser after logging in:
+
+1. Install a cookie export extension (e.g., EditThisCookie)
+2. Log in to voila.ca
+3. Export cookies to a JSON file
+4. `./voila import-cookies ~/voila-cookies.json`
 
 ## Architecture
 
@@ -89,6 +110,8 @@ src/
 ├── cli.py        # Unified CLI interface
 ├── search.py     # Product search (Playwright)
 ├── cart.py       # Cart operations (Playwright + REST)
+├── lists.py      # Shopping lists (Playwright)
+├── session.py    # Session/cookie management
 ├── models.py     # Product, CartItem, Cart dataclasses
 ├── client.py     # HTTP client with retry logic
 └── exceptions.py # Custom exceptions

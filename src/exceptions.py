@@ -27,6 +27,11 @@ class VoilaSessionExpired(VoilaAuthError):
     pass
 
 
+class VoilaAuthRequired(VoilaAuthError):
+    """Authentification requise pour cette fonctionnalité"""
+    pass
+
+
 class VoilaProductNotFound(VoilaError):
     """Produit introuvable"""
     

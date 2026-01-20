@@ -102,6 +102,70 @@ class CartManager:
         except Exception:
             pass  # Ignore saving errors
     
+    def login(self, email: str, password: str) -> bool:
+        """
+        Se connecter à un compte Voilà.
+        
+        Args:
+            email: Email du compte
+            password: Mot de passe
+            
+        Returns:
+            True si connexion réussie
+        """
+        self._ensure_browser()
+        
+        try:
+            # Aller sur la page de connexion
+            self._page.goto(f"{self.BASE_URL}/login", wait_until="domcontentloaded", timeout=self.timeout)
+            self._page.wait_for_timeout(2000)
+            
+            # Remplir le formulaire
+            email_input = self._page.locator('input[name="email"], input[type="email"]').first
+            email_input.fill(email)
+            
+            password_input = self._page.locator('input[name="password"], input[type="password"]').first
+            password_input.fill(password)
+            
+            # Soumettre
+            submit_btn = self._page.locator('button[type="submit"]').first
+            submit_btn.click()
+            
+            # Attendre la redirection (succès) ou message d'erreur
+            self._page.wait_for_timeout(5000)
+            
+            # Vérifier si on est connecté (pas sur /login)
+            current_url = self._page.url
+            if "/login" not in current_url:
+                self._save_cookies()
+                return True
+            
+            # Vérifier aussi si on a un cookie d'auth
+            cookies = {c['name']: c['value'] for c in self._context.cookies()}
+            if 'auth_token' in cookies or 'session' in cookies:
+                self._save_cookies()
+                return True
+            
+            return False
+            
+        except Exception as e:
+            raise VoilaBrowserError(f"Login failed: {e}")
+    
+    def is_logged_in(self) -> bool:
+        """Vérifie si on est connecté"""
+        self._ensure_browser()
+        
+        try:
+            # Aller sur la page d'accueil et vérifier
+            self._page.goto(self.BASE_URL, wait_until="domcontentloaded", timeout=self.timeout)
+            self._page.wait_for_timeout(2000)
+            
+            # Chercher un indicateur de connexion (nom d'utilisateur, bouton "Mon compte", etc.)
+            account_indicator = self._page.locator('[data-testid="account-menu"], .account-menu, [aria-label*="account"], [aria-label*="Account"]').first
+            return account_indicator.is_visible()
+        except Exception:
+            return False
+    
     def _navigate_to_search(self, query: str = ""):
         """Navigate vers une page qui a le panier initialisé"""
         url = f"{self.BASE_URL}/search?q={quote(query)}" if query else self.BASE_URL
