@@ -223,33 +223,35 @@ def cmd_refresh(args):
     """Rafraîchit la session en accédant au site"""
     from .session import SessionManager
     
-    print("🔄 Rafraîchissement de la session...", file=sys.stderr)
+    quiet = getattr(args, 'quiet', False)
+    
+    if not quiet:
+        print("🔄 Rafraîchissement de la session...", file=sys.stderr)
     
     session_mgr = SessionManager(session_file=args.session)
-    
-    # Status avant
-    status_before = session_mgr.validate_session()
     
     # Refresh
     if session_mgr.refresh_session():
         # Status après
         status_after = session_mgr.validate_session(force=True)
-        
-        print("✅ Session rafraîchie!", file=sys.stderr)
-        
-        if status_after.authenticated:
-            name = status_after.customer_name or status_after.email
-            print(f"   • Connecté: {name}", file=sys.stderr)
-        
-        # Afficher les cookies mis à jour
         info = session_mgr.get_session_info()
-        print(f"   • Cookies: {info['total_cookies']}", file=sys.stderr)
-        if info.get('earliest_expiry'):
-            print(f"   • Prochaine expiration: {info['earliest_expiry'][:10]}", file=sys.stderr)
+        
+        if not quiet:
+            print("✅ Session rafraîchie!", file=sys.stderr)
+            
+            if status_after.authenticated:
+                name = status_after.customer_name or status_after.email
+                print(f"   • Connecté: {name}", file=sys.stderr)
+            
+            print(f"   • Cookies: {info['total_cookies']}", file=sys.stderr)
+            days = info.get('days_remaining')
+            if days is not None:
+                print(f"   • Session valide: {days}j", file=sys.stderr)
         
         return 0
     else:
-        print("❌ Échec du rafraîchissement", file=sys.stderr)
+        if not quiet:
+            print("❌ Échec du rafraîchissement", file=sys.stderr)
         return 1
 
 
@@ -505,6 +507,7 @@ Exemples:
     
     # refresh
     refresh_parser = subparsers.add_parser("refresh", help="Rafraîchit la session (renouvelle les cookies)")
+    refresh_parser.add_argument("-q", "--quiet", action="store_true", help="Mode silencieux (pour cron)")
     refresh_parser.set_defaults(func=cmd_refresh)
     
     args = parser.parse_args()

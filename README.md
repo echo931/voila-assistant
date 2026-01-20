@@ -103,6 +103,33 @@ Lists require authentication. Export cookies from your browser after logging in:
 3. Export cookies to a JSON file
 4. `./voila import-cookies ~/voila-cookies.json`
 
+### Session Management
+
+Sessions persist for 7 days. Use these commands to manage your session:
+
+```bash
+./voila status                  # Check session health and days remaining
+./voila refresh                 # Manually refresh session cookies
+./voila refresh --quiet         # Silent mode (for cron jobs)
+```
+
+### Automatic Session Refresh (Cron)
+
+To keep your session alive automatically, set up a cron job:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add this line (refresh every 3 days at 6 AM UTC)
+0 6 */3 * * /path/to/voila-assistant/scripts/voila-refresh.sh >> ~/.voila-refresh.log 2>&1
+```
+
+The script:
+- Checks if refresh is needed (< 5 days remaining)
+- Only refreshes when necessary
+- Logs all actions to `~/.voila-refresh.log`
+
 ## Architecture
 
 ```

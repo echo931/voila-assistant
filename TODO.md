@@ -33,21 +33,22 @@ Maintenir la session active automatiquement pour éviter la ré-authentification
 - [x] Merge des nouveaux cookies avec existants
 - [x] Affichage du status post-refresh
 
-### 7.2 Cron job pour refresh automatique
+### 7.2 Cron job pour refresh automatique ✅
 **Priorité: Haute** - Évite l'expiration de session sans intervention
 
-- [ ] Script `scripts/voila-refresh.sh` autonome
-  - Lance `./voila refresh`
+- [x] Script `scripts/voila-refresh.sh` autonome
+  - Lance `./voila refresh --quiet`
   - Log le résultat dans `~/.voila-refresh.log`
   - Exit code 0 si succès, 1 si échec
+  - Smart refresh: ne rafraîchit que si < 5 jours restants
   
-- [ ] Documentation cron dans README
+- [x] Documentation cron dans README
   ```bash
   # Refresh tous les 3 jours (avant expiration des 7 jours)
   0 6 */3 * * /home/echo/projects/voila-assistant/scripts/voila-refresh.sh
   ```
 
-- [ ] Option `--quiet` pour refresh sans output (pour cron)
+- [x] Option `--quiet` pour refresh sans output (pour cron)
   ```bash
   ./voila refresh --quiet  # Retourne seulement exit code
   ```
