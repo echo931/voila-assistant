@@ -166,6 +166,62 @@ class CartManager:
         except Exception:
             return False
     
+    def _dismiss_popups(self):
+        """Ferme les popups promotionnels qui peuvent bloquer les interactions"""
+        try:
+            # D'abord essayer Escape plusieurs fois
+            for _ in range(3):
+                self._page.keyboard.press('Escape')
+                self._page.wait_for_timeout(300)
+            
+            # Chercher le popup Voilà spécifique
+            popup = self._page.query_selector('[data-test="pop-up-banner"]')
+            if popup and popup.is_visible():
+                # Trouver tous les boutons dans le popup ou autour
+                close_selectors = [
+                    '[data-test="pop-up-banner"] button',
+                    '[data-test="pop-up-banner"] [role="button"]',
+                    '[data-test="popup-close"]',
+                    '[data-test="close-popup"]',
+                    'button[aria-label*="lose"]',
+                    'button[aria-label*="ermer"]',
+                    '.sc-wq4me9-0 button',  # Classe du popup Voilà
+                ]
+                
+                for selector in close_selectors:
+                    close_btn = self._page.query_selector(selector)
+                    if close_btn:
+                        try:
+                            close_btn.click(force=True)
+                            self._page.wait_for_timeout(500)
+                            # Vérifier si popup disparu
+                            popup = self._page.query_selector('[data-test="pop-up-banner"]')
+                            if not popup or not popup.is_visible():
+                                return True
+                        except:
+                            pass
+                
+                # Si toujours visible, essayer de le masquer via JS
+                self._page.evaluate('''() => {
+                    const popup = document.querySelector('[data-test="pop-up-banner"]');
+                    if (popup) {
+                        popup.style.display = 'none';
+                        popup.remove();
+                    }
+                    // Aussi masquer tout overlay
+                    document.querySelectorAll('[class*="overlay"], [class*="modal"]').forEach(el => {
+                        if (el.style.position === 'fixed' || el.style.position === 'absolute') {
+                            el.style.display = 'none';
+                        }
+                    });
+                }''')
+                self._page.wait_for_timeout(500)
+                return True
+            
+            return False
+        except Exception:
+            return False
+    
     def _navigate_to_search(self, query: str = ""):
         """Navigate vers une page qui a le panier initialisé"""
         url = f"{self.BASE_URL}/search?q={quote(query)}" if query else self.BASE_URL
@@ -174,6 +230,9 @@ class CartManager:
         except PlaywrightTimeout:
             pass  # Continue anyway
         self._page.wait_for_timeout(2000)
+        
+        # Fermer les popups qui pourraient bloquer
+        self._dismiss_popups()
     
     def _get_cart_via_api(self) -> dict:
         """Récupère le panier via l'API REST (plus fiable que __INITIAL_STATE__)"""
@@ -390,8 +449,8 @@ class CartManager:
             # Attendre que les produits se chargent
             self._page.wait_for_timeout(3000)
             
-            # Stratégie 1: Boutons "Add" avec aria-label contenant "to basket"
-            add_buttons = self._page.query_selector_all('button[aria-label*="to basket"], button[aria-label*="au panier"]')
+            # Stratégie 1: Boutons "Add" avec aria-label contenant "to basket/cart" ou "au panier/chariot"
+            add_buttons = self._page.query_selector_all('button[aria-label*="to basket"], button[aria-label*="to cart"], button[aria-label*="au panier"], button[aria-label*="au chariot"]')
             
             if not add_buttons:
                 # Stratégie 2: Chercher les product-card-container et leur bouton
@@ -425,10 +484,13 @@ class CartManager:
             cart_before = self._get_cart_via_api()
             ids_before = set(item.get('productId', '') for item in cart_before.get('items', []))
             
-            # Cliquer pour ajouter
+            # Fermer les popups qui pourraient bloquer le clic
+            self._dismiss_popups()
+            
+            # Cliquer pour ajouter (force=True pour ignorer les overlays)
             for i in range(quantity):
-                button.click()
-                self._page.wait_for_timeout(800)
+                button.click(force=True)
+                self._page.wait_for_timeout(1000)
             
             self._page.wait_for_timeout(1500)
             
