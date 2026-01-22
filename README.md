@@ -46,6 +46,8 @@ $ ./voila cart
 | 🛒 **Cart** | ✅ | Add, remove, clear items |
 | 📋 **Lists** | ✅ | View lists, filter by sales, add to cart |
 | 📦 **Local Cart** | ✅ | Compose cart offline, batch sync to Voilà |
+| 📝 **Needs** | ✅ | Persistent grocery needs list for household |
+| ⭐ **Preferences** | ✅ | Product favorites, substitutes, brands to avoid |
 | 📊 **Formats** | ✅ | Table, Telegram HTML, JSON output |
 | 💾 **Session** | ✅ | Persistent cookies across runs |
 | 🔐 **Auth** | ✅ | Import cookies from browser for lists |
@@ -99,6 +101,23 @@ playwright install chromium
 ./voila local-sync                     # Sync to Voilà online cart
 ./voila local-sync --clear-after       # Sync then clear local cart
 
+# Needs list (household shopping)
+./voila need "lait" -q 2               # Add a need
+./voila need "céréales" --who Emma     # Need added by Emma
+./voila need "sirop" --urgent          # Mark as urgent
+./voila needs                          # List pending needs
+./voila needs --compile                # Format for shopping trip
+./voila needs --to-local               # Transfer to local cart
+./voila needs --done "lait"            # Mark as purchased
+./voila needs --clear-done             # Remove completed
+
+# Product preferences
+./voila pref "lait" --favorite "Lactantia 2%"
+./voila pref "lait" --substitute "Natrel 2%"
+./voila pref "lait" --avoid "Generic"
+./voila pref "lait" --show             # Show preferences
+./voila prefs                          # List all preferences
+
 # Session management
 ./voila status                         # Check authentication status
 ./voila import-cookies cookies.json    # Import cookies from browser
@@ -122,6 +141,60 @@ Sessions persist for 7 days. Use these commands to manage your session:
 ./voila refresh                 # Manually refresh session cookies
 ./voila refresh --quiet         # Silent mode (for cron jobs)
 ```
+
+### Needs List (Household Shopping)
+
+Track grocery needs from anyone in the household. Perfect for families where multiple people notice items running low:
+
+```bash
+# Add needs throughout the week
+./voila need "lait" -q 2                    # Need 2 units of milk
+./voila need "céréales" --who Emma          # Emma wants cereal
+./voila need "sirop d'érable" --urgent      # Mark as urgent
+
+# View all pending needs
+./voila needs                               # List pending needs
+./voila needs --by Emma                     # Filter by person
+./voila needs --compile                     # Format for shopping trip
+
+# When going shopping
+./voila needs --to-local                    # Transfer to local cart (uses preferences)
+./voila local-sync --clear-after            # Sync to Voilà
+
+# After shopping
+./voila needs --done                        # Mark all as done
+./voila needs --done "lait"                 # Mark specific item
+./voila needs --clear-done                  # Remove completed items
+```
+
+The needs list is stored in `~/.voila-needs.json`.
+
+### Product Preferences
+
+Define favorite products, substitutes, and brands to avoid for each need type. When transferring needs to the local cart, preferences are used to resolve generic items to specific products:
+
+```bash
+# Set your favorite milk
+./voila pref "lait" --favorite "Lactantia PurFiltre 2%"
+
+# Add acceptable substitutes
+./voila pref "lait" --substitute "Natrel 2%" --notes "OK if Lactantia unavailable"
+./voila pref "lait" --substitute "Québon 2%"
+
+# Specify brands to avoid
+./voila pref "lait" --avoid "Generic Brand"
+
+# View preferences for an item
+./voila pref "lait" --show
+
+# List all preferences
+./voila prefs
+./voila prefs -f json                       # JSON output
+```
+
+Now when you use `voila needs --to-local`, the need for "lait" will be resolved to "Lactantia PurFiltre 2%" (the favorite) automatically.
+
+Preferences are stored in `~/.voila-preferences.json`.
 
 ### Local Cart (Offline Composition)
 
@@ -167,15 +240,23 @@ The script:
 
 ```
 src/
-├── cli.py        # Unified CLI interface
-├── search.py     # Product search (Playwright)
-├── cart.py       # Cart operations (Playwright + REST)
-├── lists.py      # Shopping lists (Playwright)
-├── local_cart.py # Local cart for offline composition
-├── session.py    # Session/cookie management
-├── models.py     # Product, CartItem, Cart dataclasses
-├── client.py     # HTTP client with retry logic
-└── exceptions.py # Custom exceptions
+├── cli.py         # Unified CLI interface
+├── search.py      # Product search (Playwright)
+├── cart.py        # Cart operations (Playwright + REST)
+├── lists.py       # Shopping lists (Playwright)
+├── local_cart.py  # Local cart for offline composition
+├── needs.py       # Household needs list management
+├── preferences.py # Product preferences (favorites, substitutes, avoid)
+├── session.py     # Session/cookie management
+├── models.py      # Product, CartItem, Cart dataclasses
+├── client.py      # HTTP client with retry logic
+└── exceptions.py  # Custom exceptions
+
+Data files:
+├── ~/.voila-session.json      # Browser cookies
+├── ~/.voila-local-cart.json   # Local cart items
+├── ~/.voila-needs.json        # Household needs
+└── ~/.voila-preferences.json  # Product preferences
 ```
 
 ## Limitations

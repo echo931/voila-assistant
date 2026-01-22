@@ -25,6 +25,8 @@ from .search import ProductSearch
 from .cart import CartManager
 from .lists import ListsManager, format_lists_summary, format_search_results
 from .local_cart import LocalCartManager
+from .needs import NeedsManager
+from .preferences import PreferencesManager
 from .exceptions import VoilaAuthRequired
 
 
@@ -493,6 +495,193 @@ def cmd_local_sync(args):
     return 0 if result['total_errors'] == 0 else 1
 
 
+# =============================================================================
+# BESOINS (NEEDS) - Commandes
+# =============================================================================
+
+def cmd_need(args):
+    """Ajoute un besoin à la liste"""
+    fmt = _get_format(args)
+    needs_mgr = NeedsManager()
+    
+    priority = "urgent" if args.urgent else "normal"
+    
+    need = needs_mgr.add_need(
+        item=args.item,
+        quantity=args.quantity,
+        unit=args.unit,
+        priority=priority,
+        added_by=args.who,
+        notes=args.notes
+    )
+    
+    print(f"✅ Ajouté: {need.format_line()}", file=sys.stderr)
+    
+    if fmt == "json":
+        print(json.dumps(need.to_dict(), indent=2, ensure_ascii=False))
+    elif fmt == "telegram":
+        print(needs_mgr.format_telegram())
+    else:
+        print(needs_mgr.format_summary())
+    
+    return 0
+
+
+def cmd_needs(args):
+    """Liste les besoins ou effectue une action dessus"""
+    fmt = _get_format(args)
+    needs_mgr = NeedsManager()
+    
+    # Action: marquer fait
+    if args.done:
+        if args.done == "__all__":
+            count = needs_mgr.mark_all_done()
+            print(f"✅ {count} besoins marqués comme faits", file=sys.stderr)
+        else:
+            need = needs_mgr.mark_done(args.done)
+            if need:
+                print(f"✅ Marqué fait: {need.item}", file=sys.stderr)
+            else:
+                print(f"⚠️ Non trouvé: {args.done}", file=sys.stderr)
+                return 1
+    
+    # Action: nettoyer les complétés
+    elif args.clear_done:
+        count = needs_mgr.clear_done()
+        print(f"🗑️ {count} besoins complétés supprimés", file=sys.stderr)
+    
+    # Action: compiler pour épicerie
+    elif args.compile:
+        print(needs_mgr.compile_list())
+        return 0
+    
+    # Action: transférer vers panier local
+    elif args.to_local:
+        local_mgr = LocalCartManager()
+        items = needs_mgr.to_local_cart_items()
+        
+        if not items:
+            print("⚠️ Aucun besoin à transférer", file=sys.stderr)
+            return 0
+        
+        # Utiliser les préférences pour résoudre les besoins
+        prefs_mgr = PreferencesManager()
+        
+        added = 0
+        for item_data in items:
+            query = prefs_mgr.resolve_need(item_data["query"])
+            local_mgr.add_item(query, item_data["quantity"])
+            added += 1
+        
+        print(f"✅ {added} besoins ajoutés au panier local", file=sys.stderr)
+        print(local_mgr.format_summary())
+        return 0
+    
+    # Action: supprimer un besoin
+    elif args.remove:
+        if needs_mgr.remove_need(args.remove):
+            print(f"✅ Supprimé: {args.remove}", file=sys.stderr)
+        else:
+            print(f"⚠️ Non trouvé: {args.remove}", file=sys.stderr)
+            return 1
+    
+    # Affichage par défaut: liste des besoins
+    status = args.status if hasattr(args, 'status') and args.status else "pending"
+    
+    if fmt == "json":
+        needs = needs_mgr.list_needs(status=status if status != "all" else None, by=args.by)
+        print(json.dumps([n.to_dict() for n in needs], indent=2, ensure_ascii=False))
+    elif fmt == "telegram":
+        print(needs_mgr.format_telegram())
+    else:
+        print(needs_mgr.format_summary())
+    
+    return 0
+
+
+# =============================================================================
+# PRÉFÉRENCES - Commandes
+# =============================================================================
+
+def cmd_pref(args):
+    """Gère les préférences pour un produit"""
+    fmt = _get_format(args)
+    prefs_mgr = PreferencesManager()
+    
+    # Action: définir le favori
+    if args.favorite:
+        pref = prefs_mgr.set_favorite(args.item, args.favorite)
+        print(f"⭐ Favori pour '{args.item}': {args.favorite}", file=sys.stderr)
+    
+    # Action: ajouter un substitut
+    elif args.substitute:
+        pref = prefs_mgr.add_substitute(args.item, args.substitute, notes=args.notes)
+        print(f"🔄 Substitut ajouté pour '{args.item}': {args.substitute}", file=sys.stderr)
+    
+    # Action: ajouter à éviter
+    elif args.avoid:
+        pref = prefs_mgr.add_avoid(args.item, args.avoid)
+        print(f"🚫 Ajouté à éviter pour '{args.item}': {args.avoid}", file=sys.stderr)
+    
+    # Action: définir la catégorie
+    elif args.category:
+        pref = prefs_mgr.set_category(args.item, args.category)
+        print(f"📁 Catégorie pour '{args.item}': {args.category}", file=sys.stderr)
+    
+    # Action: afficher les préférences
+    elif args.show:
+        pref = prefs_mgr.get_preference(args.item)
+        if pref:
+            if fmt == "json":
+                print(json.dumps(pref.to_dict(), indent=2, ensure_ascii=False))
+            else:
+                print(f"📋 Préférences pour '{args.item}':\n")
+                print(pref.format_summary())
+        else:
+            print(f"⚠️ Aucune préférence pour '{args.item}'", file=sys.stderr)
+        return 0
+    
+    # Action: supprimer les préférences
+    elif args.delete:
+        if prefs_mgr.delete_preference(args.item):
+            print(f"🗑️ Préférences supprimées pour '{args.item}'", file=sys.stderr)
+        else:
+            print(f"⚠️ Aucune préférence pour '{args.item}'", file=sys.stderr)
+            return 1
+        return 0
+    
+    else:
+        # Afficher les préférences si aucune action
+        pref = prefs_mgr.get_preference(args.item)
+        if pref:
+            if fmt == "json":
+                print(json.dumps(pref.to_dict(), indent=2, ensure_ascii=False))
+            else:
+                print(f"📋 Préférences pour '{args.item}':\n")
+                print(pref.format_summary())
+        else:
+            print(f"⚠️ Aucune préférence pour '{args.item}'", file=sys.stderr)
+        return 0
+    
+    return 0
+
+
+def cmd_prefs(args):
+    """Liste toutes les préférences"""
+    fmt = _get_format(args)
+    prefs_mgr = PreferencesManager()
+    
+    if fmt == "json":
+        prefs = prefs_mgr.list_all_preferences()
+        print(json.dumps({k: v.to_dict() for k, v in prefs.items()}, indent=2, ensure_ascii=False))
+    elif fmt == "telegram":
+        print(prefs_mgr.format_telegram())
+    else:
+        print(prefs_mgr.format_all_preferences())
+    
+    return 0
+
+
 def cmd_list_add(args):
     """Ajoute tous les articles d'une liste au panier"""
     fmt = _get_format(args)
@@ -550,6 +739,21 @@ Exemples:
   voila local-remove "lait 2%"        Retirer du panier local
   voila local-clear                   Vider le panier local
   voila local-sync --clear-after      Sync vers panier en ligne
+  
+  --- Besoins ---
+  voila need "lait" -q 2              Ajouter un besoin
+  voila need "céréales" --who Emma    Besoin ajouté par Emma
+  voila needs                         Liste des besoins
+  voila needs --compile               Liste formatée pour épicerie
+  voila needs --to-local              Transférer vers panier local
+  voila needs --done lait             Marquer un besoin comme fait
+  
+  --- Préférences ---
+  voila pref "lait" --favorite "Lactantia 2%"
+  voila pref "lait" --substitute "Natrel 2%"
+  voila pref "lait" --avoid "Marque X"
+  voila pref "lait" --show            Voir préférences
+  voila prefs                         Liste toutes les préférences
         """
     )
     parser.add_argument(
@@ -635,6 +839,57 @@ Exemples:
     refresh_parser = subparsers.add_parser("refresh", help="Rafraîchit la session (renouvelle les cookies)")
     refresh_parser.add_argument("-q", "--quiet", action="store_true", help="Mode silencieux (pour cron)")
     refresh_parser.set_defaults(func=cmd_refresh)
+    
+    # ==========================================================================
+    # BESOINS (NEEDS) - Subparsers
+    # ==========================================================================
+    
+    # need (add a need)
+    need_parser = subparsers.add_parser("need", help="Ajoute un besoin à la liste")
+    need_parser.add_argument("item", help="Article à ajouter (ex: 'lait', 'céréales')")
+    need_parser.add_argument("-q", "--quantity", type=float, default=1.0, help="Quantité (défaut: 1)")
+    need_parser.add_argument("-u", "--unit", help="Unité (ex: L, kg, boîtes)")
+    need_parser.add_argument("--who", default="Mathieu", help="Qui ajoute ce besoin (défaut: Mathieu)")
+    need_parser.add_argument("--urgent", action="store_true", help="Marquer comme urgent")
+    need_parser.add_argument("--notes", help="Notes additionnelles")
+    need_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    need_parser.set_defaults(func=cmd_need)
+    
+    # needs (list/manage needs)
+    needs_parser = subparsers.add_parser("needs", help="Liste et gère les besoins")
+    needs_parser.add_argument("--by", help="Filtrer par personne")
+    needs_parser.add_argument("--status", choices=["pending", "done", "all"], default="pending",
+                              help="Filtrer par statut (défaut: pending)")
+    needs_parser.add_argument("--compile", action="store_true", help="Compiler la liste pour l'épicerie")
+    needs_parser.add_argument("--to-local", action="store_true", help="Transférer vers panier local")
+    needs_parser.add_argument("--done", nargs="?", const="__all__", metavar="ITEM",
+                              help="Marquer fait (un item ou tous)")
+    needs_parser.add_argument("--clear-done", action="store_true", help="Supprimer les besoins complétés")
+    needs_parser.add_argument("--remove", metavar="ITEM", help="Supprimer un besoin")
+    needs_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    needs_parser.set_defaults(func=cmd_needs)
+    
+    # ==========================================================================
+    # PRÉFÉRENCES - Subparsers
+    # ==========================================================================
+    
+    # pref (manage one preference)
+    pref_parser = subparsers.add_parser("pref", help="Gère les préférences pour un produit")
+    pref_parser.add_argument("item", help="Nom du besoin (ex: 'lait', 'céréales')")
+    pref_parser.add_argument("--favorite", metavar="PRODUIT", help="Définir le produit favori")
+    pref_parser.add_argument("--substitute", metavar="PRODUIT", help="Ajouter un substitut")
+    pref_parser.add_argument("--avoid", metavar="MARQUE", help="Ajouter une marque à éviter")
+    pref_parser.add_argument("--category", help="Définir la catégorie")
+    pref_parser.add_argument("--notes", help="Notes pour le substitut")
+    pref_parser.add_argument("--show", action="store_true", help="Afficher les préférences")
+    pref_parser.add_argument("--delete", action="store_true", help="Supprimer les préférences")
+    pref_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    pref_parser.set_defaults(func=cmd_pref)
+    
+    # prefs (list all preferences)
+    prefs_parser = subparsers.add_parser("prefs", help="Liste toutes les préférences")
+    prefs_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    prefs_parser.set_defaults(func=cmd_prefs)
     
     # ==========================================================================
     # PANIER LOCAL - Subparsers
