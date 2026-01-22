@@ -229,40 +229,84 @@ class ListsManager:
             if 'login' in self._page.url.lower():
                 raise VoilaAuthRequired("Authentification requise pour accéder aux listes")
             
-            # Extraire le texte de la page et les IDs des listes
-            page_text = self._page.evaluate("() => document.body.innerText")
-            
-            list_ids = self._page.evaluate("""() => {
+            # Extraire les listes avec leurs IDs directement depuis les éléments DOM
+            # Chaque carte de liste contient un lien "Afficher la liste" avec l'ID
+            lists_data = self._page.evaluate(r"""() => {
+                const results = [];
+                // Trouver tous les liens vers des listes (typiquement "Afficher la liste")
                 const links = document.querySelectorAll('a[href*="/lists/"]');
-                const ids = [];
+                const seen = new Set();
+                
                 for (const link of links) {
                     const href = link.getAttribute('href');
-                    const match = href.match(/\\/lists\\/([a-f0-9-]+)/);
-                    if (match && ids.indexOf(match[1]) === -1) {
-                        ids.push(match[1]);
+                    const match = href.match(/\/lists\/([a-f0-9-]+)/);
+                    if (!match || seen.has(match[1])) continue;
+                    seen.add(match[1]);
+                    
+                    const listId = match[1];
+                    
+                    // Remonter pour trouver le conteneur de la carte de liste
+                    // On cherche un parent qui contient "Total" et "articles"
+                    let cardEl = link;
+                    for (let i = 0; i < 8 && cardEl.parentElement; i++) {
+                        cardEl = cardEl.parentElement;
+                        const text = cardEl.innerText || '';
+                        if (text.includes('Total') && text.includes('articles')) {
+                            break;
+                        }
+                    }
+                    
+                    const cardText = cardEl.innerText || '';
+                    const lines = cardText.split('\n').map(l => l.trim()).filter(l => l);
+                    
+                    // Trouver le nom de la liste - c'est la première ligne significative
+                    let name = '';
+                    for (const line of lines) {
+                        // Ignorer les textes de navigation/boutons
+                        if (line.match(/^(Total|Afficher|Ajouter|offres?|articles?)$/i)) continue;
+                        if (line.match(/^\d+\s*(offres?|articles?)$/i)) continue;
+                        if (line.match(/^Total\s*:/i)) continue;
+                        if (line.match(/^[\d\s,.]+\s*\$$/)) continue;
+                        if (line.length > 1 && line.length < 40) {
+                            name = line;
+                            break;
+                        }
+                    }
+                    
+                    // Extraire le total, nombre d'articles et offres
+                    let itemCount = 0;
+                    let saleCount = 0;
+                    let total = '';
+                    
+                    for (const line of lines) {
+                        const totalMatch = line.match(/Total\s*:\s*([\d\s,.]+)\s*\$/i);
+                        if (totalMatch) {
+                            total = totalMatch[1].replace(/\s/g, '').replace(',', '.');
+                        }
+                        const articlesMatch = line.match(/^(\d+)\s*articles?$/i);
+                        if (articlesMatch) {
+                            itemCount = parseInt(articlesMatch[1], 10);
+                        }
+                        const offresMatch = line.match(/^(\d+)\s*offres?$/i);
+                        if (offresMatch) {
+                            saleCount = parseInt(offresMatch[1], 10);
+                        }
+                    }
+                    
+                    // Ajouter si on a trouvé un nom valide
+                    if (name) {
+                        results.push({
+                            id: listId,
+                            name: name,
+                            total: total,
+                            item_count: itemCount,
+                            sale_count: saleCount
+                        });
                     }
                 }
-                return ids;
+                
+                return results;
             }""")
-            
-            # Parser le texte en Python pour éviter les problèmes de regex JS
-            pattern = r'([^\n]+)\nTotal\s*:\s*([\d\s,.]+)\s*\$\n(\d+)\s*articles?\n(\d+)\s*offres?'
-            matches = re.findall(pattern, page_text, re.IGNORECASE)
-            
-            lists_data = []
-            for i, (name, total, count, sales) in enumerate(matches):
-                name = name.strip()
-                # Filtrer les faux positifs
-                if len(name) > 1 and len(name) < 50 and 'Voilà' not in name and 'IGA' not in name:
-                    # Nettoyer le total (enlever espaces et remplacer virgule par point)
-                    total_clean = total.replace(' ', '').replace(',', '.').replace('\xa0', '')
-                    lists_data.append({
-                        'id': list_ids[i] if i < len(list_ids) else '',
-                        'name': name,
-                        'total': total_clean,
-                        'item_count': int(count),
-                        'sale_count': int(sales)
-                    })
             
             result = []
             for ld in lists_data:
