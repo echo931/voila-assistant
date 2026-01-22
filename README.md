@@ -45,6 +45,7 @@ $ ./voila cart
 | 🔍 **Search** | ✅ | Find products with prices, sizes, unit prices |
 | 🛒 **Cart** | ✅ | Add, remove, clear items |
 | 📋 **Lists** | ✅ | View lists, filter by sales, add to cart |
+| 📦 **Local Cart** | ✅ | Compose cart offline, batch sync to Voilà |
 | 📊 **Formats** | ✅ | Table, Telegram HTML, JSON output |
 | 💾 **Session** | ✅ | Persistent cookies across runs |
 | 🔐 **Auth** | ✅ | Import cookies from browser for lists |
@@ -89,6 +90,15 @@ playwright install chromium
 ./voila list-search "lait"             # Search across all lists
 ./voila list-add "Épicerie"            # Add entire list to cart
 
+# Local cart (compose offline, sync later)
+./voila local                          # View local cart
+./voila local-add "lait 2%" -q 2       # Add 2x milk to local cart
+./voila local-add "pain blanc"         # Add bread
+./voila local-remove "lait 2%"         # Remove item
+./voila local-clear                    # Clear local cart
+./voila local-sync                     # Sync to Voilà online cart
+./voila local-sync --clear-after       # Sync then clear local cart
+
 # Session management
 ./voila status                         # Check authentication status
 ./voila import-cookies cookies.json    # Import cookies from browser
@@ -112,6 +122,29 @@ Sessions persist for 7 days. Use these commands to manage your session:
 ./voila refresh                 # Manually refresh session cookies
 ./voila refresh --quiet         # Silent mode (for cron jobs)
 ```
+
+### Local Cart (Offline Composition)
+
+The local cart lets you compose a shopping list offline, then sync it to Voilà in one batch:
+
+```bash
+# Add items throughout the day
+./voila local-add "lait 2%" -q 2
+./voila local-add "pain blanc"
+./voila local-add "bananes"
+
+# View your local cart
+./voila local
+
+# When ready, sync everything to Voilà
+./voila local-sync --clear-after
+```
+
+The local cart is stored in `~/.voila-local-cart.json`. Benefits:
+- **No browser needed** for adding/removing items locally
+- **Batch sync** reduces total browser time
+- **Works offline** — sync when connected
+- **Progress tracking** during sync
 
 ### Automatic Session Refresh (Cron)
 
@@ -138,6 +171,7 @@ src/
 ├── search.py     # Product search (Playwright)
 ├── cart.py       # Cart operations (Playwright + REST)
 ├── lists.py      # Shopping lists (Playwright)
+├── local_cart.py # Local cart for offline composition
 ├── session.py    # Session/cookie management
 ├── models.py     # Product, CartItem, Cart dataclasses
 ├── client.py     # HTTP client with retry logic

@@ -24,6 +24,7 @@ from pathlib import Path
 from .search import ProductSearch
 from .cart import CartManager
 from .lists import ListsManager, format_lists_summary, format_search_results
+from .local_cart import LocalCartManager
 from .exceptions import VoilaAuthRequired
 
 
@@ -374,6 +375,124 @@ def cmd_list_search(args):
         return 1
 
 
+# =============================================================================
+# PANIER LOCAL - Commandes
+# =============================================================================
+
+def cmd_local(args):
+    """Affiche le panier local"""
+    fmt = _get_format(args)
+    local_mgr = LocalCartManager()
+    
+    if fmt == "json":
+        print(local_mgr.format_json())
+    elif fmt == "telegram":
+        print(local_mgr.format_telegram())
+    else:
+        print(local_mgr.format_summary())
+    
+    return 0
+
+
+def cmd_local_add(args):
+    """Ajoute un produit au panier local"""
+    fmt = _get_format(args)
+    local_mgr = LocalCartManager()
+    
+    item = local_mgr.add_item(args.query, args.quantity)
+    
+    print(f"✅ Ajouté: {item.query} ×{item.quantity}", file=sys.stderr)
+    
+    if fmt == "json":
+        print(local_mgr.format_json())
+    elif fmt == "telegram":
+        print(local_mgr.format_telegram())
+    else:
+        print(local_mgr.format_summary())
+    
+    return 0
+
+
+def cmd_local_remove(args):
+    """Retire un produit du panier local"""
+    fmt = _get_format(args)
+    local_mgr = LocalCartManager()
+    
+    if local_mgr.remove_item(args.query):
+        print(f"✅ Retiré: {args.query}", file=sys.stderr)
+    else:
+        print(f"⚠️ Non trouvé: {args.query}", file=sys.stderr)
+    
+    if fmt == "json":
+        print(local_mgr.format_json())
+    elif fmt == "telegram":
+        print(local_mgr.format_telegram())
+    else:
+        print(local_mgr.format_summary())
+    
+    return 0
+
+
+def cmd_local_clear(args):
+    """Vide le panier local"""
+    fmt = _get_format(args)
+    local_mgr = LocalCartManager()
+    
+    local_mgr.clear()
+    print("🗑️ Panier local vidé!", file=sys.stderr)
+    
+    if fmt == "json":
+        print(local_mgr.format_json())
+    elif fmt == "telegram":
+        print(local_mgr.format_telegram())
+    else:
+        print(local_mgr.format_summary())
+    
+    return 0
+
+
+def cmd_local_sync(args):
+    """Synchronise le panier local vers le panier en ligne"""
+    fmt = _get_format(args)
+    local_mgr = LocalCartManager()
+    
+    if local_mgr.is_empty():
+        print("⚠️ Panier local vide, rien à synchroniser", file=sys.stderr)
+        return 0
+    
+    total = local_mgr.item_count()
+    print(f"📤 Synchronisation de {total} produits vers Voilà...", file=sys.stderr)
+    
+    def progress(current, total, item_name):
+        print(f"  [{current}/{total}] {item_name}...", file=sys.stderr)
+    
+    with CartManager(headless=True, session_file=args.session) as cart_mgr:
+        result = local_mgr.sync_to_online(cart_mgr, progress_callback=progress)
+        
+        print("", file=sys.stderr)
+        
+        if result['total_errors'] == 0:
+            print(f"✅ {result['message']}", file=sys.stderr)
+        else:
+            print(f"⚠️ {result['message']}", file=sys.stderr)
+            for err in result['errors']:
+                print(f"   • {err['product']}: {err['error']}", file=sys.stderr)
+        
+        # Vider le panier local après sync réussie si demandé
+        if args.clear_after and result['total_added'] > 0:
+            local_mgr.clear()
+            print("🗑️ Panier local vidé après sync", file=sys.stderr)
+        
+        # Afficher le panier en ligne mis à jour
+        if fmt == "json":
+            print(json.dumps(result, indent=2))
+        else:
+            cart = cart_mgr.get_cart()
+            print(f"\n{cart.format_summary()}")
+    
+    return 0 if result['total_errors'] == 0 else 1
+
+
 def cmd_list_add(args):
     """Ajoute tous les articles d'une liste au panier"""
     fmt = _get_format(args)
@@ -424,6 +543,13 @@ Exemples:
   voila lists                         Voir toutes les listes (auth requise)
   voila list "Épicerie" --sales       Articles en solde de la liste
   voila list-add "Épicerie"           Ajouter toute la liste au panier
+  
+  --- Panier local ---
+  voila local                         Voir le panier local
+  voila local-add "lait 2%" -q 2      Ajouter au panier local
+  voila local-remove "lait 2%"        Retirer du panier local
+  voila local-clear                   Vider le panier local
+  voila local-sync --clear-after      Sync vers panier en ligne
         """
     )
     parser.add_argument(
@@ -509,6 +635,40 @@ Exemples:
     refresh_parser = subparsers.add_parser("refresh", help="Rafraîchit la session (renouvelle les cookies)")
     refresh_parser.add_argument("-q", "--quiet", action="store_true", help="Mode silencieux (pour cron)")
     refresh_parser.set_defaults(func=cmd_refresh)
+    
+    # ==========================================================================
+    # PANIER LOCAL - Subparsers
+    # ==========================================================================
+    
+    # local (show local cart)
+    local_parser = subparsers.add_parser("local", help="Affiche le panier local")
+    local_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    local_parser.set_defaults(func=cmd_local)
+    
+    # local-add
+    local_add_parser = subparsers.add_parser("local-add", help="Ajoute un produit au panier local")
+    local_add_parser.add_argument("query", help="Produit à ajouter")
+    local_add_parser.add_argument("-q", "--quantity", type=int, default=1, help="Quantité (défaut: 1)")
+    local_add_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    local_add_parser.set_defaults(func=cmd_local_add)
+    
+    # local-remove
+    local_remove_parser = subparsers.add_parser("local-remove", help="Retire un produit du panier local")
+    local_remove_parser.add_argument("query", help="Produit à retirer")
+    local_remove_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    local_remove_parser.set_defaults(func=cmd_local_remove)
+    
+    # local-clear
+    local_clear_parser = subparsers.add_parser("local-clear", help="Vide le panier local")
+    local_clear_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    local_clear_parser.set_defaults(func=cmd_local_clear)
+    
+    # local-sync
+    local_sync_parser = subparsers.add_parser("local-sync", help="Synchronise le panier local vers Voilà")
+    local_sync_parser.add_argument("--clear-after", "-c", action="store_true", 
+                                    help="Vider le panier local après sync réussie")
+    local_sync_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    local_sync_parser.set_defaults(func=cmd_local_sync)
     
     args = parser.parse_args()
     

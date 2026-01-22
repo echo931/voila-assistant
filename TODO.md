@@ -16,10 +16,12 @@ Liste des tâches détaillées pour le développement.
 | 6 | CLI + Skill | ✅ Complété |
 | 7 | Refresh automatique | 📋 À faire |
 | 8 | Notifications | 📋 À faire |
+| 9 | Panier local | ✅ Complété |
 
 **MVP atteint le 2026-01-19** - Fonctionnalités de base opérationnelles.
 **Listes ajoutées le 2026-01-20** - Support complet des listes de courses.
 **Session persistante le 2026-01-20** - Cookies convertis en persistants.
+**Panier local le 2026-01-22** - Composition offline et sync batch.
 
 ---
 
@@ -166,6 +168,38 @@ Le temps de démarrage (15-30s) est acceptable pour usage occasionnel.
 | `userId` | Session → 7j | User ID |
 | `VISITORID` | 1 an | Visitor tracking |
 | `userEmail` | Session → 7j | Email (si auth) |
+
+---
+
+## Phase 9: Panier local ✅
+
+### Objectif
+Permettre de composer un panier offline puis de le synchroniser vers Voilà en batch.
+
+### 9.1 Module local_cart.py ✅
+- [x] Classe `LocalCartItem` - item avec query, quantity, product_id optionnel
+- [x] Classe `LocalCart` - conteneur avec timestamps
+- [x] Classe `LocalCartManager` - opérations CRUD
+- [x] Persistance JSON dans `~/.voila-local-cart.json`
+- [x] Méthodes: add_item, remove_item, clear, list_items
+- [x] Méthode sync_to_online avec progression
+
+### 9.2 Commandes CLI ✅
+- [x] `voila local` - affiche le panier local
+- [x] `voila local-add "produit" -q N` - ajoute au panier local
+- [x] `voila local-remove "produit"` - retire du panier local
+- [x] `voila local-clear` - vide le panier local
+- [x] `voila local-sync [--clear-after]` - sync vers panier en ligne
+
+### 9.3 Tests ✅
+- [x] Tests unitaires dans tests/test_local_cart.py
+- [x] 22 tests passent
+
+### Avantages
+- Pas de browser pour ajouter/retirer localement → instantané
+- Composition de liste au fil de la journée
+- Sync batch unique → économie de temps
+- Fonctionne offline
 
 ---
 
