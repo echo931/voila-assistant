@@ -9,7 +9,6 @@
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
 ![Playwright](https://img.shields.io/badge/Playwright-automation-green)
-![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ## Demo
 
@@ -280,9 +279,9 @@ Voilà.ca doesn't offer an official API for automated shopping. This project dem
 
 This tool automates a web browser to interact with Voilà.ca. It doesn't bypass any security measures or access protected data. Use responsibly and respect rate limits.
 
-## License
+## Disclaimer
 
-MIT — Use at your own risk.
+This project is experimental, might be broken, and is provided as-is. Use at your own risk. License TBD.
 
 ---
 
