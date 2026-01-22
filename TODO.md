@@ -17,11 +17,13 @@ Liste des tâches détaillées pour le développement.
 | 7 | Refresh automatique | 📋 À faire |
 | 8 | Notifications | 📋 À faire |
 | 9 | Panier local | ✅ Complété |
+| 10 | Liste de besoins + Préférences | ✅ Complété |
 
 **MVP atteint le 2026-01-19** - Fonctionnalités de base opérationnelles.
 **Listes ajoutées le 2026-01-20** - Support complet des listes de courses.
 **Session persistante le 2026-01-20** - Cookies convertis en persistants.
 **Panier local le 2026-01-22** - Composition offline et sync batch.
+**Besoins + Préférences le 2026-01-22** - Liste de besoins household + préférences produits.
 
 ---
 
@@ -203,13 +205,59 @@ Permettre de composer un panier offline puis de le synchroniser vers Voilà en b
 
 ---
 
+## Phase 10: Liste de besoins + Préférences produits ✅
+
+### Objectif
+Permettre aux membres du household de signaler des besoins au fil du temps, et configurer des préférences produits pour la résolution automatique.
+
+### 10.1 Module needs.py ✅
+- [x] Classe `NeedItem` - item avec id, item, quantity, unit, priority, added_by, added_at, notes, status
+- [x] Classe `NeedsManager` - opérations CRUD
+- [x] Persistance JSON dans `~/.voila-needs.json`
+- [x] Méthodes: add_need, remove_need, list_needs, mark_done, clear_done
+- [x] compile_list() - formatage liste d'épicerie groupée par priorité
+- [x] to_local_cart_items() - transfert vers panier local avec résolution
+
+### 10.2 Module preferences.py ✅
+- [x] Classe `ProductRef` - référence produit (name, product_id, price, notes)
+- [x] Classe `ProductPreference` - favorite, substitutes, avoid, constraints
+- [x] Classe `PreferencesManager` - opérations CRUD
+- [x] Persistance JSON dans `~/.voila-preferences.json`
+- [x] Méthodes: set_favorite, add_substitute, add_avoid, resolve_need
+- [x] Gestion des membres du household
+
+### 10.3 Commandes CLI ✅
+- [x] `voila need "item" [-q N] [--who NAME] [--urgent] [--notes "..."]`
+- [x] `voila needs [--by NAME] [--status STATUS] [--compile] [--to-local] [--done] [--clear-done]`
+- [x] `voila pref "item" [--favorite|--substitute|--avoid|--show|--delete]`
+- [x] `voila prefs`
+
+### 10.4 Tests ✅
+- [x] tests/test_needs.py - 27 tests
+- [x] tests/test_preferences.py - 39 tests
+- [x] Total: 95 tests passent
+
+### Intégration clé
+`voila needs --to-local` utilise les préférences pour résoudre automatiquement les besoins génériques en produits spécifiques.
+
+---
+
+## Roadmap future
+
+Voir `docs/ROADMAP-SMART-GROCERY.md` pour les phases planifiées :
+- Phase 2: Cache produits + intelligence prix
+- Phase 3: Intégration Mealie (recettes)
+- Phase 4: Feedback et apprentissage
+- Phase 5: Automatisation proactive
+
+---
+
 ## Prochaine tâche recommandée
 
-**→ Phase 7.2: Cron job pour refresh automatique**
+**→ Phase 2: Cache produits (ROADMAP-SMART-GROCERY.md)**
 
-1. Créer `scripts/voila-refresh.sh`
-2. Ajouter option `--quiet` au refresh
-3. Documenter setup cron dans README
-4. Tester sur quelques jours
+OU
 
-Temps estimé: 30-45 minutes
+**→ Phase 7.3: Refresh intelligent de session**
+
+Temps estimé: 1-2 sessions
