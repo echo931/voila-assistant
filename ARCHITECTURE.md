@@ -2,72 +2,89 @@
 
 ## Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         VOILÀ ASSISTANT                              │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  User (CLI / Telegram / AI Agent)                                   │
-│         │                                                           │
-│         ▼                                                           │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                     CLI LAYER (cli.py)                       │   │
-│  │  Commands: search, cart, add, lists, needs, prefs, etc.     │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│         │                                                           │
-│         ▼                                                           │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                      CORE MODULES                            │   │
-│  │                                                              │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │   │
-│  │  │ search   │ │  cart    │ │  lists   │ │  needs   │       │   │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘       │   │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐                    │   │
-│  │  │local_cart│ │  prefs   │ │ session  │                    │   │
-│  │  └──────────┘ └──────────┘ └──────────┘                    │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│         │                                                           │
-│         ▼                                                           │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                   INFRASTRUCTURE                             │   │
-│  │                                                              │   │
-│  │  Playwright (Chromium)     requests (HTTP)     JSON files   │   │
-│  │  - Search pages            - Cart API          - Session    │   │
-│  │  - Cart actions            - (403 on writes)   - Local cart │   │
-│  │  - State extraction                            - Needs      │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│         │                                                           │
-│         ▼                                                           │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                    EXTERNAL SERVICES                         │   │
-│  │                                                              │   │
-│  │  voila.ca (Sobeys/IGA)          Local Files                 │   │
-│  │  - REST API                     ~/.voila-session.json       │   │
-│  │  - Web pages                    ~/.voila-local-cart.json    │   │
-│  │  - __INITIAL_STATE__            ~/.voila-needs.json         │   │
-│  │                                 ~/.voila-preferences.json   │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Interface
+        User[User<br/>CLI / Telegram / AI Agent]
+        CLI[cli.py<br/>Commands: search, cart, add, lists, needs, prefs]
+    end
+
+    subgraph Core[Core Modules]
+        search[search.py]
+        cart[cart.py]
+        lists[lists.py]
+        needs[needs.py]
+        local_cart[local_cart.py]
+        prefs[preferences.py]
+        session[session.py]
+    end
+
+    subgraph Infra[Infrastructure]
+        PW[Playwright<br/>Chromium]
+        HTTP[requests<br/>HTTP client]
+        JSON[JSON files]
+    end
+
+    subgraph External[External Services]
+        Voila[voila.ca<br/>REST API + Web pages]
+        Files[Local Files<br/>~/.voila-*.json]
+    end
+
+    User --> CLI
+    CLI --> search & cart & lists & needs & local_cart & prefs
+    search & cart & lists --> PW
+    cart --> HTTP
+    needs & local_cart & prefs & session --> JSON
+    PW --> Voila
+    HTTP --> Voila
+    JSON --> Files
 ```
 
 ## Data Flow
 
 ### Product Search
-```
-User → CLI → search.py → Playwright → voila.ca/search
-                              ↓
-                    Extract __INITIAL_STATE__
-                              ↓
-                    Parse product entities
-                              ↓
-                    Return List[Product]
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant search.py
+    participant Playwright
+    participant voila.ca
+
+    User->>CLI: ./voila search "lait"
+    CLI->>search.py: search(query)
+    search.py->>Playwright: Launch browser
+    Playwright->>voila.ca: GET /search?q=lait
+    voila.ca-->>Playwright: HTML + __INITIAL_STATE__
+    Playwright-->>search.py: Extract JS state
+    search.py-->>CLI: List[Product]
+    CLI-->>User: Formatted table
 ```
 
 ### Cart Operations
-```
-Read:   CLI → cart.py → requests → GET /api/cart/v1/carts/active → Cart
-Write:  CLI → cart.py → Playwright → Click "Add to basket" → Cart
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant cart.py
+    participant Playwright
+    participant API
+
+    Note over User,API: Cart Read (API works)
+    User->>CLI: ./voila cart
+    CLI->>cart.py: get_cart()
+    cart.py->>API: GET /api/cart/v1/carts/active
+    API-->>cart.py: Cart JSON
+    cart.py-->>User: Cart display
+
+    Note over User,API: Cart Write (API blocked, use browser)
+    User->>CLI: ./voila add "bananes"
+    CLI->>cart.py: add_item()
+    cart.py->>Playwright: Click "Add to basket"
+    Playwright-->>cart.py: Success
+    cart.py-->>User: ✅ Added
 ```
 
 ### Why Playwright for Writes?
