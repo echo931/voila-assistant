@@ -1,213 +1,130 @@
-# Architecture - Voilà Assistant
+# Architecture
 
-## Vue d'ensemble
+## Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              VOILÀ ASSISTANT                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────┐                                                           │
-│  │   USER      │                                                           │
-│  │  (Telegram) │                                                           │
-│  └──────┬──────┘                                                           │
-│         │                                                                   │
-│         ▼                                                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                        INTERFACE LAYER                               │   │
-│  │  ┌─────────────────┐    ┌─────────────────┐    ┌────────────────┐  │   │
-│  │  │ TelegramHandler │    │   CLI Handler   │    │  (Future API)  │  │   │
-│  │  └────────┬────────┘    └────────┬────────┘    └───────┬────────┘  │   │
-│  └───────────┼──────────────────────┼─────────────────────┼────────────┘   │
-│              │                      │                     │                 │
-│              └──────────────────────┼─────────────────────┘                 │
-│                                     ▼                                       │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                         CORE LAYER                                   │   │
-│  │                                                                      │   │
-│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │   │
-│  │  │ ProductSearch│    │ CartManager  │    │ Authenticator│          │   │
-│  │  │              │    │              │    │              │          │   │
-│  │  │ - search()   │    │ - get_cart() │    │ - login()    │          │   │
-│  │  │ - get_by_id()│    │ - add_item() │    │ - logout()   │          │   │
-│  │  │              │    │ - remove()   │    │ - is_auth()  │          │   │
-│  │  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │   │
-│  │         │                   │                   │                   │   │
-│  └─────────┼───────────────────┼───────────────────┼───────────────────┘   │
-│            │                   │                   │                       │
-│            └───────────────────┼───────────────────┘                       │
-│                                ▼                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                      INFRASTRUCTURE LAYER                            │   │
-│  │                                                                      │   │
-│  │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │   │
-│  │  │ VoilaClient  │    │SessionManager│    │BrowserClient │          │   │
-│  │  │              │    │              │    │ (Playwright) │          │   │
-│  │  │ - get()      │    │ - load()     │    │              │          │   │
-│  │  │ - post()     │    │ - save()     │    │ - navigate() │          │   │
-│  │  │ - cookies    │    │ - is_valid() │    │ - extract()  │          │   │
-│  │  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘          │   │
-│  │         │                   │                   │                   │   │
-│  └─────────┼───────────────────┼───────────────────┼───────────────────┘   │
-│            │                   │                   │                       │
-│            ▼                   ▼                   ▼                       │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                       EXTERNAL SERVICES                              │   │
-│  │                                                                      │   │
-│  │        voila.ca              ~/.secrets/           Chromium          │   │
-│  │        (API REST)            voila-session.json    (Headless)        │   │
-│  │                                                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         VOILÀ ASSISTANT                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  User (CLI / Telegram / AI Agent)                                   │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                     CLI LAYER (cli.py)                       │   │
+│  │  Commands: search, cart, add, lists, needs, prefs, etc.     │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                      CORE MODULES                            │   │
+│  │                                                              │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │   │
+│  │  │ search   │ │  cart    │ │  lists   │ │  needs   │       │   │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘       │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐                    │   │
+│  │  │local_cart│ │  prefs   │ │ session  │                    │   │
+│  │  └──────────┘ └──────────┘ └──────────┘                    │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                   INFRASTRUCTURE                             │   │
+│  │                                                              │   │
+│  │  Playwright (Chromium)     requests (HTTP)     JSON files   │   │
+│  │  - Search pages            - Cart API          - Session    │   │
+│  │  - Cart actions            - (403 on writes)   - Local cart │   │
+│  │  - State extraction                            - Needs      │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│         │                                                           │
+│         ▼                                                           │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                    EXTERNAL SERVICES                         │   │
+│  │                                                              │   │
+│  │  voila.ca (Sobeys/IGA)          Local Files                 │   │
+│  │  - REST API                     ~/.voila-session.json       │   │
+│  │  - Web pages                    ~/.voila-local-cart.json    │   │
+│  │  - __INITIAL_STATE__            ~/.voila-needs.json         │   │
+│  │                                 ~/.voila-preferences.json   │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Composants
+## Data Flow
 
-### Interface Layer
-
-#### TelegramHandler
-Gère les commandes Telegram `/voila`.
-
-```python
-# Commandes supportées
-/voila recherche <terme>     # Recherche de produits
-/voila ajouter <ref> [qty]   # Ajouter au panier
-/voila panier                # Voir le panier
-/voila vider                 # Vider le panier
-/voila checkout              # Lien vers checkout
+### Product Search
+```
+User → CLI → search.py → Playwright → voila.ca/search
+                              ↓
+                    Extract __INITIAL_STATE__
+                              ↓
+                    Parse product entities
+                              ↓
+                    Return List[Product]
 ```
 
-#### CLI Handler
-Interface en ligne de commande pour tests et debug.
-
-```bash
-python -m src.search "lait 2%"
-python -m src.cart show
-python -m src.cart add <product_id>
+### Cart Operations
+```
+Read:   CLI → cart.py → requests → GET /api/cart/v1/carts/active → Cart
+Write:  CLI → cart.py → Playwright → Click "Add to basket" → Cart
 ```
 
-### Core Layer
+### Why Playwright for Writes?
 
-#### ProductSearch
-Recherche de produits via browser + extraction JavaScript.
+The Voilà REST API returns 403 for cart modification endpoints. Browser automation
+is required to interact with the cart through the normal UI flow.
 
-**Flux:**
-1. Ouvrir `voila.ca/search?q=<query>` avec Playwright
-2. Attendre le chargement
-3. Extraire `window.__INITIAL_STATE__.data.products.productEntities`
-4. Parser et retourner les produits
+## Key Technical Discoveries
 
-#### CartManager
-Gestion du panier via API REST.
+### API Endpoints
 
-**Flux ajout:**
-1. Charger cookies de session
-2. POST `/api/cart/v1/carts/active/add-items`
-3. Parser la réponse
-4. Retourner le panier mis à jour
+| Endpoint | Method | Notes |
+|----------|--------|-------|
+| `/search?q=<query>` | GET (browser) | Returns page with `__INITIAL_STATE__` |
+| `/api/cart/v1/carts/active` | GET | Returns cart JSON |
+| `/api/cart/v1/carts/active/add-items` | POST | Returns 403 (blocked) |
+| `/lists` | GET (browser) | Shopping lists (server-rendered) |
 
-**Flux consultation:**
-1. Charger cookies de session
-2. GET `/api/cart/v1/carts/active`
-3. Parser et retourner le panier
+### State Extraction
 
-#### Authenticator
-Gestion de l'authentification via browser.
+Product data is embedded in pages as `window.__INITIAL_STATE__`:
 
-**Flux login:**
-1. Ouvrir `voila.ca/login` avec Playwright
-2. Remplir email/password
-3. Soumettre le formulaire
-4. Gérer CAPTCHA si présent (intervention humaine)
-5. Capturer les cookies
-6. Sauvegarder via SessionManager
-
-### Infrastructure Layer
-
-#### VoilaClient
-Client HTTP avec gestion des cookies et retry.
-
-```python
-class VoilaClient:
-    BASE_URL = "https://voila.ca"
-    
-    def __init__(self, session_manager: SessionManager = None):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': '...',
-            'Accept': 'application/json',
-            'Accept-Language': 'fr-CA,fr;q=0.9,en;q=0.8'
-        })
-        if session_manager:
-            self.session.cookies.update(session_manager.get_cookies())
-    
-    def get(self, endpoint: str) -> dict:
-        url = f"{self.BASE_URL}{endpoint}"
-        response = self.session.get(url)
-        response.raise_for_status()
-        return response.json()
-    
-    def post(self, endpoint: str, data: dict) -> dict:
-        url = f"{self.BASE_URL}{endpoint}"
-        response = self.session.post(url, json=data)
-        response.raise_for_status()
-        return response.json()
+```javascript
+window.__INITIAL_STATE__ = {
+  data: {
+    products: {
+      productEntities: {
+        "product-uuid": {
+          id: "uuid",
+          name: "Product Name",
+          brand: "Brand",
+          price: { current: { amount: "5.49" } },
+          // ...
+        }
+      }
+    }
+  }
+}
 ```
 
-#### SessionManager
-Gestion des cookies de session.
+### Authentication
 
-```python
-class SessionManager:
-    def __init__(self, session_file: Path):
-        self.session_file = session_file
-        self.cookies = {}
-    
-    def load(self) -> bool:
-        if self.session_file.exists():
-            with open(self.session_file) as f:
-                self.cookies = json.load(f)
-            return True
-        return False
-    
-    def save(self) -> None:
-        with open(self.session_file, 'w') as f:
-            json.dump(self.cookies, f)
-    
-    def is_valid(self) -> bool:
-        # Vérifier si les cookies sont encore valides
-        # (faire une requête test)
-        pass
-```
+- SSO via Gigya (voila.login-seconnecter.ca)
+- Anti-bot protection blocks headless login
+- Solution: Import cookies from authenticated browser session
+- Session cookies valid ~7 days, can be refreshed
 
-#### BrowserClient
-Client Playwright pour les opérations nécessitant JavaScript.
+### Critical Cookies
 
-```python
-class BrowserClient:
-    def __init__(self):
-        self.playwright = None
-        self.browser = None
-    
-    def __enter__(self):
-        self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=True)
-        return self
-    
-    def __exit__(self, *args):
-        self.browser.close()
-        self.playwright.stop()
-    
-    def extract_state(self, url: str) -> dict:
-        page = self.browser.new_page()
-        page.goto(url, wait_until="networkidle")
-        state = page.evaluate("() => window.__INITIAL_STATE__")
-        page.close()
-        return state
-```
+| Cookie | Purpose |
+|--------|---------|
+| `global_sid` | Session ID |
+| `userId` | User identifier |
+| `VISITORID` | Visitor tracking |
+| `userEmail` | Email (when authenticated) |
 
-## Modèles de données
+## Data Models
 
 ### Product
 ```python
@@ -218,11 +135,9 @@ class Product:
     brand: Optional[str]
     size: Optional[str]
     price: Decimal
-    currency: str = "CAD"
-    unit_price: Optional[Decimal] = None
-    unit_label: Optional[str] = None
+    unit_price: Optional[Decimal]
+    unit_label: Optional[str]
     available: bool = True
-    category: Optional[str] = None
 ```
 
 ### CartItem
@@ -236,69 +151,43 @@ class CartItem:
     total_price: Decimal
 ```
 
-### Cart
+### NeedItem
 ```python
 @dataclass
-class Cart:
+class NeedItem:
     id: str
-    items: List[CartItem]
-    subtotal: Decimal
-    currency: str = "CAD"
+    item: str
+    quantity: int
+    unit: Optional[str]
+    priority: str  # "low", "normal", "urgent"
+    added_by: Optional[str]
+    added_at: datetime
+    notes: Optional[str]
+    status: str  # "pending", "done"
 ```
 
-## Flux de données
+## Security Considerations
 
-### Recherche de produits
-```
-User Input → TelegramHandler → ProductSearch → BrowserClient → voila.ca
-                                    ↓
-                              List[Product]
-                                    ↓
-                            Format Telegram
-                                    ↓
-                              User Output
-```
-
-### Ajout au panier
-```
-User Input → TelegramHandler → CartManager → VoilaClient → /api/cart/...
-                                    ↑              ↓
-                            SessionManager    API Response
-                                    ↓
-                                  Cart
-                                    ↓
-                            Format Telegram
-                                    ↓
-                              User Output
-```
-
-## Sécurité
-
-### Stockage des credentials
-```
-~/.secrets/
-├── voila-session.json    # Cookies (chmod 600)
-└── voila-credentials      # Email/password si nécessaire (chmod 600)
-```
-
-### Principes
-1. **Jamais** de données de carte bancaire
-2. Cookies en fichier local protégé
-3. Validation humaine pour checkout
-4. Logs sans données sensibles
+1. **No payment data**: Checkout is manual (link provided)
+2. **Local cookie storage**: `~/.voila-session.json` (chmod 600)
+3. **No credential storage**: Import cookies, don't store passwords
+4. **Minimal scraping**: Respect rate limits, use sparingly
 
 ## Configuration
 
-### Variables d'environnement
+### Environment Variables
+
 ```bash
-VOILA_SESSION_FILE=~/.secrets/voila-session.json
-VOILA_DEBUG=0              # 1 pour mode debug
-VOILA_HEADLESS=1           # 0 pour voir le browser
-VOILA_TIMEOUT=30           # Timeout en secondes
+VOILA_DEBUG=1          # Enable debug logging
+VOILA_HEADLESS=1       # Run browser headless (default)
+VOILA_TIMEOUT=30       # Request timeout in seconds
 ```
 
-### Fichier .env
-```ini
-# .env (non versionné)
-VOILA_SESSION_FILE=~/.secrets/voila-session.json
+### File Locations
+
+```
+~/.voila-session.json       # Auth cookies
+~/.voila-local-cart.json    # Offline cart
+~/.voila-needs.json         # Household needs
+~/.voila-preferences.json   # Product preferences
 ```

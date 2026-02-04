@@ -62,7 +62,7 @@ $ ./voila cart
 ## Installation
 
 ```bash
-git clone https://git.2027a.net/echo/voila-assistant.git
+git clone https://github.com/echo931/voila-assistant.git
 cd voila-assistant
 python3 -m venv venv
 source venv/bin/activate
@@ -275,13 +275,19 @@ Voilà.ca doesn't offer an official API for automated shopping. This project dem
 - Price monitoring and comparison
 - Accessibility tools for users who struggle with the UI
 
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Technical architecture and data flow
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Development setup and guidelines
+- [ROADMAP.md](ROADMAP.md) — Planned features and future direction
+
 ## Legal Note
 
 This tool automates a web browser to interact with Voilà.ca. It doesn't bypass any security measures or access protected data. Use responsibly and respect rate limits.
 
-## Disclaimer
+## License
 
-This project is experimental, might be broken, and is provided as-is. Use at your own risk. License TBD.
+MIT — see [LICENSE](LICENSE).
 
 ---
 
