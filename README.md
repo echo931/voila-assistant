@@ -246,11 +246,13 @@ uv run ./voila browse dairy-eggs/milk         # Browse nested category
 uv run ./voila subcategories dairy-eggs       # List child categories
 ```
 
-**First run:** The cache is empty, so you'll need to crawl the full tree (~2-3 min):
+**⚠️ First run:** The cache is empty. You must run with `--refresh` to populate it:
 
 ```bash
-uv run ./voila categories --refresh           # Initial crawl
+uv run ./voila categories --refresh           # Initial crawl (~2-3 min)
 ```
+
+Without `--refresh`, subsequent calls read from cache instantly.
 
 **Automatic refresh:** A nightly cron (4h Toronto) keeps the cache fresh. You can also refresh manually:
 

@@ -44,6 +44,20 @@ uv run ./voila add "pain" -i 1 -q 2
 uv run ./voila clear
 ```
 
+### Browse categories
+```bash
+# ⚠️ First run: must use --refresh to populate cache (~2-3 min)
+uv run ./voila categories --refresh
+
+# After cache exists: instant
+uv run ./voila categories              # List all categories
+uv run ./voila categories --tree       # Show hierarchy
+uv run ./voila browse dairy-eggs       # Browse products in category
+uv run ./voila subcategories dairy-eggs # Show child categories
+```
+
+Cache: `~/.voila-categories.json` (refreshed nightly by cron)
+
 ## Output Formats
 
 - `table` (default): ASCII table
