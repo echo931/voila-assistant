@@ -93,6 +93,13 @@ uv run ./voila add "lait 2%"                  # Add first search result
 uv run ./voila add "pommes" -i 2 -q 3         # Add 3x the 2nd result
 uv run ./voila clear                          # Empty cart
 
+# Categories (with caching)
+uv run ./voila categories                     # List from cache (instant)
+uv run ./voila categories --tree              # Show hierarchy
+uv run ./voila categories --refresh           # Full crawl (~2-3 min first time)
+uv run ./voila browse dairy-eggs              # Browse products in category
+uv run ./voila subcategories dairy-eggs       # Show child categories
+
 # Lists (requires authentication)
 uv run ./voila lists                          # Show all shopping lists
 uv run ./voila list "Épicerie"                # Show list contents
@@ -226,6 +233,32 @@ The local cart is stored in `~/.voila-local-cart.json`. Benefits:
 - **Batch sync** reduces total browser time
 - **Works offline** — sync when connected
 - **Progress tracking** during sync
+
+### Category Browsing (with Cache)
+
+Browse products by category. The category tree is cached locally for instant lookups:
+
+```bash
+uv run ./voila categories                     # List categories (from cache)
+uv run ./voila categories --tree              # Show as tree
+uv run ./voila browse dairy-eggs              # Browse products
+uv run ./voila browse dairy-eggs/milk         # Browse nested category
+uv run ./voila subcategories dairy-eggs       # List child categories
+```
+
+**First run:** The cache is empty, so you'll need to crawl the full tree (~2-3 min):
+
+```bash
+uv run ./voila categories --refresh           # Initial crawl
+```
+
+**Automatic refresh:** A nightly cron (4h Toronto) keeps the cache fresh. You can also refresh manually:
+
+```bash
+uv run python scripts/refresh-categories.py --quiet   # Background refresh
+```
+
+Cache stored in `~/.voila-categories.json`.
 
 ### Automatic Session Refresh (Cron)
 
