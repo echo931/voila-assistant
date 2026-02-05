@@ -2,38 +2,46 @@
 
 Commandes d'épicerie sur Voilà.ca (IGA en ligne).
 
-## CLI Location
+## Usage
 
+All commands use `uv run` (no venv activation needed):
+
+```bash
+cd ~/projects/voila-assistant
+uv run ./voila <command>
 ```
-~/projects/voila-assistant/voila
+
+Or with alias:
+```bash
+alias voila="cd ~/projects/voila-assistant && uv run ./voila"
 ```
 
 ## Commands
 
 ### Search products
 ```bash
-~/projects/voila-assistant/voila search "lait 2%" -n 5
-~/projects/voila-assistant/voila search "bananes" -f telegram
+uv run ./voila search "lait 2%" -n 5
+uv run ./voila search "bananes" -f telegram
 ```
 
 ### View cart
 ```bash
-~/projects/voila-assistant/voila cart
-~/projects/voila-assistant/voila cart -f telegram
+uv run ./voila cart
+uv run ./voila cart -f telegram
 ```
 
 ### Add to cart
 ```bash
 # Add first result for "lait 2%"
-~/projects/voila-assistant/voila add "lait 2%"
+uv run ./voila add "lait 2%"
 
 # Add second result, quantity 2
-~/projects/voila-assistant/voila add "pain" -i 1 -q 2
+uv run ./voila add "pain" -i 1 -q 2
 ```
 
 ### Clear cart
 ```bash
-~/projects/voila-assistant/voila clear
+uv run ./voila clear
 ```
 
 ## Output Formats
@@ -57,14 +65,14 @@ Session cookies stored at `~/.voila-session.json`. Persists cart between runs.
 
 User: "Ajoute du lait et des bananes au panier"
 
-1. `voila add "lait 2%" -f telegram` → adds milk
-2. `voila add "bananes" -f telegram` → adds bananas
-3. `voila cart -f telegram` → show cart summary
+1. `uv run ./voila add "lait 2%" -f telegram` → adds milk
+2. `uv run ./voila add "bananes" -f telegram` → adds bananas
+3. `uv run ./voila cart -f telegram` → show cart summary
 
 User: "Qu'est-ce qui est dans mon panier?"
 
-1. `voila cart -f telegram`
+1. `uv run ./voila cart -f telegram`
 
 User: "Vide mon panier"
 
-1. `voila clear`
+1. `uv run ./voila clear`

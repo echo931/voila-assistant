@@ -14,7 +14,7 @@
 
 ```bash
 # Search for products
-$ ./voila search "lait 2%" -n 3
+$ uv run ./voila search "lait 2%" -n 3
 
 Produit                                            Taille   Prix     Prix unitaire     
 ======================================================================================
@@ -23,12 +23,12 @@ Natrel 2% Milk Partly Skimmed 2 L                  2L       $5.49    $0.27/100ml
 Québon 2% Milk 4 L                                 4L       $7.97    $0.20/100ml
 
 # Add to cart
-$ ./voila add "bananes" -i 1
+$ uv run ./voila add "bananes" -i 1
 
 ✅ Added: Bananas
 
 # View cart
-$ ./voila cart
+$ uv run ./voila cart
 
 🛒 Panier (1 article)
 - Bananas x1 — $0.31/lb
@@ -64,62 +64,71 @@ $ ./voila cart
 ```bash
 git clone https://github.com/echo931/voila-assistant.git
 cd voila-assistant
+uv sync
+uv run playwright install chromium
+```
+
+<details>
+<summary>Alternative: pip (not recommended)</summary>
+
+```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 ```
+</details>
 
 ## Usage
 
 ```bash
 # Search products
-./voila search "fromage cheddar" -n 10
-./voila search "pain" -f json          # JSON output
-./voila search "oeufs" -f telegram     # Telegram HTML format
+uv run ./voila search "fromage cheddar" -n 10
+uv run ./voila search "pain" -f json          # JSON output
+uv run ./voila search "oeufs" -f telegram     # Telegram HTML format
 
 # Cart management
-./voila cart                           # View cart
-./voila add "lait 2%"                  # Add first search result
-./voila add "pommes" -i 2 -q 3         # Add 3x the 2nd result
-./voila clear                          # Empty cart
+uv run ./voila cart                           # View cart
+uv run ./voila add "lait 2%"                  # Add first search result
+uv run ./voila add "pommes" -i 2 -q 3         # Add 3x the 2nd result
+uv run ./voila clear                          # Empty cart
 
 # Lists (requires authentication)
-./voila lists                          # Show all shopping lists
-./voila list "Épicerie"                # Show list contents
-./voila list "Épicerie" --sales        # Show only items on sale
-./voila list-search "lait"             # Search across all lists
-./voila list-add "Épicerie"            # Add entire list to cart
+uv run ./voila lists                          # Show all shopping lists
+uv run ./voila list "Épicerie"                # Show list contents
+uv run ./voila list "Épicerie" --sales        # Show only items on sale
+uv run ./voila list-search "lait"             # Search across all lists
+uv run ./voila list-add "Épicerie"            # Add entire list to cart
 
 # Local cart (compose offline, sync later)
-./voila local                          # View local cart
-./voila local-add "lait 2%" -q 2       # Add 2x milk to local cart
-./voila local-add "pain blanc"         # Add bread
-./voila local-remove "lait 2%"         # Remove item
-./voila local-clear                    # Clear local cart
-./voila local-sync                     # Sync to Voilà online cart
-./voila local-sync --clear-after       # Sync then clear local cart
+uv run ./voila local                          # View local cart
+uv run ./voila local-add "lait 2%" -q 2       # Add 2x milk to local cart
+uv run ./voila local-add "pain blanc"         # Add bread
+uv run ./voila local-remove "lait 2%"         # Remove item
+uv run ./voila local-clear                    # Clear local cart
+uv run ./voila local-sync                     # Sync to Voilà online cart
+uv run ./voila local-sync --clear-after       # Sync then clear local cart
 
 # Needs list (household shopping)
-./voila need "lait" -q 2               # Add a need
-./voila need "céréales" --who Emma     # Need added by Emma
-./voila need "sirop" --urgent          # Mark as urgent
-./voila needs                          # List pending needs
-./voila needs --compile                # Format for shopping trip
-./voila needs --to-local               # Transfer to local cart
-./voila needs --done "lait"            # Mark as purchased
-./voila needs --clear-done             # Remove completed
+uv run ./voila need "lait" -q 2               # Add a need
+uv run ./voila need "céréales" --who Emma     # Need added by Emma
+uv run ./voila need "sirop" --urgent          # Mark as urgent
+uv run ./voila needs                          # List pending needs
+uv run ./voila needs --compile                # Format for shopping trip
+uv run ./voila needs --to-local               # Transfer to local cart
+uv run ./voila needs --done "lait"            # Mark as purchased
+uv run ./voila needs --clear-done             # Remove completed
 
 # Product preferences
-./voila pref "lait" --favorite "Lactantia 2%"
-./voila pref "lait" --substitute "Natrel 2%"
-./voila pref "lait" --avoid "Generic"
-./voila pref "lait" --show             # Show preferences
-./voila prefs                          # List all preferences
+uv run ./voila pref "lait" --favorite "Lactantia 2%"
+uv run ./voila pref "lait" --substitute "Natrel 2%"
+uv run ./voila pref "lait" --avoid "Generic"
+uv run ./voila pref "lait" --show             # Show preferences
+uv run ./voila prefs                          # List all preferences
 
 # Session management
-./voila status                         # Check authentication status
-./voila import-cookies cookies.json    # Import cookies from browser
+uv run ./voila status                         # Check authentication status
+uv run ./voila import-cookies cookies.json    # Import cookies from browser
 ```
 
 ### Authentication for Lists
@@ -136,9 +145,9 @@ Lists require authentication. Export cookies from your browser after logging in:
 Sessions persist for 7 days. Use these commands to manage your session:
 
 ```bash
-./voila status                  # Check session health and days remaining
-./voila refresh                 # Manually refresh session cookies
-./voila refresh --quiet         # Silent mode (for cron jobs)
+uv run ./voila status                  # Check session health and days remaining
+uv run ./voila refresh                 # Manually refresh session cookies
+uv run ./voila refresh --quiet         # Silent mode (for cron jobs)
 ```
 
 ### Needs List (Household Shopping)
@@ -147,23 +156,23 @@ Track grocery needs from anyone in the household. Perfect for families where mul
 
 ```bash
 # Add needs throughout the week
-./voila need "lait" -q 2                    # Need 2 units of milk
-./voila need "céréales" --who Emma          # Emma wants cereal
-./voila need "sirop d'érable" --urgent      # Mark as urgent
+uv run ./voila need "lait" -q 2                    # Need 2 units of milk
+uv run ./voila need "céréales" --who Emma          # Emma wants cereal
+uv run ./voila need "sirop d'érable" --urgent      # Mark as urgent
 
 # View all pending needs
-./voila needs                               # List pending needs
-./voila needs --by Emma                     # Filter by person
-./voila needs --compile                     # Format for shopping trip
+uv run ./voila needs                               # List pending needs
+uv run ./voila needs --by Emma                     # Filter by person
+uv run ./voila needs --compile                     # Format for shopping trip
 
 # When going shopping
-./voila needs --to-local                    # Transfer to local cart (uses preferences)
-./voila local-sync --clear-after            # Sync to Voilà
+uv run ./voila needs --to-local                    # Transfer to local cart (uses preferences)
+uv run ./voila local-sync --clear-after            # Sync to Voilà
 
 # After shopping
-./voila needs --done                        # Mark all as done
-./voila needs --done "lait"                 # Mark specific item
-./voila needs --clear-done                  # Remove completed items
+uv run ./voila needs --done                        # Mark all as done
+uv run ./voila needs --done "lait"                 # Mark specific item
+uv run ./voila needs --clear-done                  # Remove completed items
 ```
 
 The needs list is stored in `~/.voila-needs.json`.
@@ -174,21 +183,21 @@ Define favorite products, substitutes, and brands to avoid for each need type. W
 
 ```bash
 # Set your favorite milk
-./voila pref "lait" --favorite "Lactantia PurFiltre 2%"
+uv run ./voila pref "lait" --favorite "Lactantia PurFiltre 2%"
 
 # Add acceptable substitutes
-./voila pref "lait" --substitute "Natrel 2%" --notes "OK if Lactantia unavailable"
-./voila pref "lait" --substitute "Québon 2%"
+uv run ./voila pref "lait" --substitute "Natrel 2%" --notes "OK if Lactantia unavailable"
+uv run ./voila pref "lait" --substitute "Québon 2%"
 
 # Specify brands to avoid
-./voila pref "lait" --avoid "Generic Brand"
+uv run ./voila pref "lait" --avoid "Generic Brand"
 
 # View preferences for an item
-./voila pref "lait" --show
+uv run ./voila pref "lait" --show
 
 # List all preferences
-./voila prefs
-./voila prefs -f json                       # JSON output
+uv run ./voila prefs
+uv run ./voila prefs -f json                       # JSON output
 ```
 
 Now when you use `voila needs --to-local`, the need for "lait" will be resolved to "Lactantia PurFiltre 2%" (the favorite) automatically.
@@ -201,15 +210,15 @@ The local cart lets you compose a shopping list offline, then sync it to Voilà 
 
 ```bash
 # Add items throughout the day
-./voila local-add "lait 2%" -q 2
-./voila local-add "pain blanc"
-./voila local-add "bananes"
+uv run ./voila local-add "lait 2%" -q 2
+uv run ./voila local-add "pain blanc"
+uv run ./voila local-add "bananes"
 
 # View your local cart
-./voila local
+uv run ./voila local
 
 # When ready, sync everything to Voilà
-./voila local-sync --clear-after
+uv run ./voila local-sync --clear-after
 ```
 
 The local cart is stored in `~/.voila-local-cart.json`. Benefits:
