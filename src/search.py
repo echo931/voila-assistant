@@ -214,37 +214,38 @@ class ProductSearch:
         except Exception as e:
             raise VoilaBrowserError(f"Erreur récupération catégories: {e}")
 
-    def get_subcategories(self, category_path: str) -> List[dict]:
+    def get_subcategories(self, category_path: str, category_id: str = None) -> List[dict]:
         """
-        Get subcategories for a given category path.
+        Get subcategories for a given category path. Works at any depth.
         
         Args:
             category_path: Category path like 'dairy-eggs' or 'dairy-eggs/milk'
+            category_id: Optional ID if known (speeds up lookup)
             
         Returns:
             List of subcategories with name, slug, id, url, full_path
         """
-        # Build URL from path
         parts = category_path.strip('/').split('/')
         
-        # Need to find the category ID first
-        base_categories = self.get_categories()
-        
-        # Find matching category
-        current_url = None
-        for cat in base_categories:
-            if cat['slug'] == parts[0]:
-                current_url = f"{self.BASE_URL}/categories/{cat['slug']}/{cat['id']}"
-                break
-        
-        if not current_url:
-            return []
-        
-        # If path has more parts, navigate deeper
-        if len(parts) > 1:
-            # Build the full path URL by fetching each level
-            current_path = parts[0]
-            for part in parts[1:]:
+        # If we have the ID, use it directly
+        if category_id:
+            current_url = f"{self.BASE_URL}/categories/{category_path}/{category_id}"
+        else:
+            # Find the category by navigating through the tree
+            base_categories = self.get_categories()
+            
+            # Find first level
+            current_url = None
+            for cat in base_categories:
+                if cat['slug'] == parts[0]:
+                    current_url = f"{self.BASE_URL}/categories/{cat['slug']}/{cat['id']}"
+                    break
+            
+            if not current_url:
+                return []
+            
+            # Navigate deeper if needed
+            for i, part in enumerate(parts[1:], 1):
                 try:
                     with sync_playwright() as p:
                         browser = p.chromium.launch(headless=self.headless)
@@ -252,14 +253,22 @@ class ProductSearch:
                         page.goto(current_url, wait_until="domcontentloaded", timeout=self.timeout)
                         page.wait_for_timeout(2000)
                         
-                        # Find subcategory link
-                        sub_url = page.evaluate(f'''
+                        # Find the subcategory link that matches this part
+                        current_path = '/'.join(parts[:i])
+                        sub_info = page.evaluate(f'''
                             () => {{
                                 const links = document.querySelectorAll('a[href*="/categories/"]');
                                 for (const link of links) {{
                                     const href = link.getAttribute('href');
-                                    if (href.includes('/{part}/')) {{
-                                        return href.startsWith('http') ? href : 'https://voila.ca' + href;
+                                    // Look for pattern: /categories/.../part/ID
+                                    const pattern = /\\/categories\\/{current_path}\\/({part})\\/([A-Z0-9]+)/;
+                                    const match = href.match(pattern);
+                                    if (match) {{
+                                        return {{
+                                            slug: match[1],
+                                            id: match[2],
+                                            url: href.split('?')[0]
+                                        }};
                                     }}
                                 }}
                                 return null;
@@ -267,15 +276,14 @@ class ProductSearch:
                         ''')
                         browser.close()
                         
-                        if sub_url:
-                            current_url = sub_url.split('?')[0]
-                            current_path += f"/{part}"
+                        if sub_info:
+                            current_url = f"{self.BASE_URL}{sub_info['url']}" if sub_info['url'].startswith('/') else sub_info['url']
                         else:
-                            break
+                            return []  # Path not found
                 except Exception:
-                    break
+                    return []
         
-        # Now fetch subcategories from current_url
+        # Now fetch subcategories from the target URL
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=self.headless)
@@ -285,8 +293,8 @@ class ProductSearch:
                 page.goto(current_url, wait_until="domcontentloaded", timeout=self.timeout)
                 page.wait_for_timeout(2000)
                 
-                # Extract subcategory links  
-                base_path = '/'.join(parts)
+                # Extract ALL subcategory links (any depth below current)
+                base_path = category_path
                 subcategories = page.evaluate(f'''
                     () => {{
                         const links = document.querySelectorAll('a[href*="/categories/"]');
@@ -296,8 +304,10 @@ class ProductSearch:
                         
                         for (const link of links) {{
                             const href = link.getAttribute('href');
-                            // Match deeper paths
-                            const pattern = new RegExp('/categories/' + basePath + '/([^/]+)/([A-Z0-9]+)');
+                            // Match any path that starts with basePath and has one more level
+                            // Pattern: /categories/basePath/slug/ID
+                            const escapedBase = basePath.replace(/\\//g, '\\\\/');
+                            const pattern = new RegExp('/categories/' + escapedBase + '/([^/?]+)/([A-Z0-9]+)');
                             const match = href.match(pattern);
                             if (match && !seen.has(match[2])) {{
                                 seen.add(match[2]);
@@ -306,7 +316,7 @@ class ProductSearch:
                                     name: name,
                                     slug: match[1],
                                     id: match[2],
-                                    url: href,
+                                    url: href.split('?')[0],
                                     full_path: basePath + '/' + match[1]
                                 }});
                             }}
