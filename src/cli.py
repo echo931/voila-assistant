@@ -69,16 +69,44 @@ def cmd_categories(args):
     cache = CategoryCache()
     fmt = _get_format(args)
     
-    # Refresh cache if requested or empty
-    if args.refresh or not cache.categories:
-        depth = getattr(args, 'depth', 2)
+    # Refresh cache if requested
+    if args.refresh:
+        depth = getattr(args, 'depth', 3)
         print(f"📂 Crawling de l'arbre (profondeur {depth})...", file=sys.stderr)
+        print("   ⏳ Première sync lente (~2-3 min), refresh nocturne ensuite", file=sys.stderr)
         
         def on_progress(msg):
             print(f"  {msg}", file=sys.stderr)
         
         count = cache.refresh(on_progress=on_progress, max_depth=depth)
         print(f"✅ {count} catégories indexées", file=sys.stderr)
+    
+    # Cache is empty - show friendly message
+    elif not cache.categories:
+        print("📂 Cache vide — première sync requise", file=sys.stderr)
+        print("   ⏳ Cette opération prend ~2-3 min (crawl complet de l'arbre Voilà)", file=sys.stderr)
+        print("   🌙 Ensuite refresh automatique chaque nuit", file=sys.stderr)
+        print("", file=sys.stderr)
+        
+        # Ask to proceed
+        if fmt != "json":
+            try:
+                response = input("   Lancer maintenant? [O/n] ").strip().lower()
+                if response in ('', 'o', 'y', 'oui', 'yes'):
+                    depth = getattr(args, 'depth', 3)
+                    print(f"\n📂 Crawling (profondeur {depth})...", file=sys.stderr)
+                    
+                    def on_progress(msg):
+                        print(f"  {msg}", file=sys.stderr)
+                    
+                    count = cache.refresh(on_progress=on_progress, max_depth=depth)
+                    print(f"✅ {count} catégories indexées", file=sys.stderr)
+                else:
+                    print("\n💡 Pour lancer plus tard: voila categories --refresh", file=sys.stderr)
+                    return 0
+            except (EOFError, KeyboardInterrupt):
+                print("\n💡 Pour lancer plus tard: voila categories --refresh", file=sys.stderr)
+                return 0
     
     if args.tree:
         # Show full tree
