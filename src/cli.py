@@ -83,6 +83,38 @@ def cmd_categories(args):
         for cat in categories:
             print(f"{cat['name']:<35} {cat['slug']:<30} {cat['id']}")
         print(f"\nTotal: {len(categories)} catégories")
+        print("\n💡 Pour voir les sous-catégories: voila subcategories <slug>")
+    
+    return 0
+
+
+def cmd_subcategories(args):
+    """Liste les sous-catégories d'une catégorie"""
+    search = ProductSearch(headless=True)
+    fmt = _get_format(args)
+    
+    print(f"📂 Récupération des sous-catégories de '{args.category}'...", file=sys.stderr)
+    subcategories = search.get_subcategories(args.category)
+    
+    if not subcategories:
+        print(f"Aucune sous-catégorie trouvée pour '{args.category}'")
+        print("(La catégorie est peut-être au niveau le plus profond)")
+        return 0
+    
+    if fmt == "json":
+        print(json.dumps(subcategories, indent=2, ensure_ascii=False))
+    elif fmt == "telegram":
+        lines = [f"<b>📂 Sous-catégories de {args.category}</b>\n"]
+        for cat in subcategories:
+            lines.append(f"• <b>{cat['name']}</b> ({cat['full_path']})")
+        print("\n".join(lines))
+    else:
+        print(f"\n{'Sous-catégorie':<35} {'Chemin complet':<45} {'ID'}")
+        print("=" * 95)
+        for cat in subcategories:
+            print(f"{cat['name']:<35} {cat['full_path']:<45} {cat['id']}")
+        print(f"\nTotal: {len(subcategories)} sous-catégories")
+        print(f"\n💡 Pour parcourir: voila browse <chemin> --id <ID>")
     
     return 0
 
@@ -92,8 +124,18 @@ def cmd_browse(args):
     search = ProductSearch(headless=True)
     fmt = _get_format(args)
     
-    # If only slug given, try to find the ID
-    if not args.id:
+    category_slug = args.category
+    category_id = args.id
+    
+    # Handle nested paths like 'dairy-eggs/milk/flavoured-milk'
+    if '/' in args.category:
+        if not args.id:
+            print(f"❌ Pour les chemins imbriqués, l'ID est requis: --id <ID>")
+            print(f"💡 Utilisez 'voila subcategories {args.category.rsplit('/', 1)[0]}' pour trouver l'ID")
+            return 1
+        print(f"📂 Catégorie: {args.category}", file=sys.stderr)
+    elif not args.id:
+        # Try to find the ID for top-level categories
         print(f"📂 Recherche de la catégorie '{args.category}'...", file=sys.stderr)
         categories = search.get_categories()
         matching = [c for c in categories if c['slug'] == args.category or c['name'].lower() == args.category.lower()]
@@ -104,9 +146,6 @@ def cmd_browse(args):
         category_slug = matching[0]['slug']
         category_id = matching[0]['id']
         print(f"📂 Catégorie: {matching[0]['name']}", file=sys.stderr)
-    else:
-        category_slug = args.category
-        category_id = args.id
     
     print(f"🔍 Chargement des produits...", file=sys.stderr)
     result = search.browse_category_formatted(category_slug, category_id, args.limit, fmt)
@@ -835,11 +874,17 @@ Exemples:
     cat_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
     cat_parser.set_defaults(func=cmd_categories)
     
+    # subcategories
+    subcat_parser = subparsers.add_parser("subcategories", help="Liste les sous-catégories")
+    subcat_parser.add_argument("category", help="Chemin de la catégorie (ex: dairy-eggs ou dairy-eggs/milk)")
+    subcat_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    subcat_parser.set_defaults(func=cmd_subcategories)
+    
     # browse
     browse_parser = subparsers.add_parser("browse", help="Parcourir une catégorie")
-    browse_parser.add_argument("category", help="Nom ou slug de la catégorie (ex: dairy-eggs)")
-    browse_parser.add_argument("--id", help="ID de la catégorie (optionnel si slug connu)")
-    browse_parser.add_argument("-n", "--limit", type=int, default=20, help="Nombre max de résultats")
+    browse_parser.add_argument("category", help="Slug ou chemin (ex: dairy-eggs ou dairy-eggs/milk/flavoured-milk)")
+    browse_parser.add_argument("--id", help="ID de la catégorie (requis pour chemins profonds)")
+    browse_parser.add_argument("-n", "--limit", type=int, default=50, help="Nombre max de résultats (défaut: 50)")
     browse_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
     browse_parser.set_defaults(func=cmd_browse)
     

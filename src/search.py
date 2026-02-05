@@ -214,6 +214,113 @@ class ProductSearch:
         except Exception as e:
             raise VoilaBrowserError(f"Erreur récupération catégories: {e}")
 
+    def get_subcategories(self, category_path: str) -> List[dict]:
+        """
+        Get subcategories for a given category path.
+        
+        Args:
+            category_path: Category path like 'dairy-eggs' or 'dairy-eggs/milk'
+            
+        Returns:
+            List of subcategories with name, slug, id, url, full_path
+        """
+        # Build URL from path
+        parts = category_path.strip('/').split('/')
+        
+        # Need to find the category ID first
+        base_categories = self.get_categories()
+        
+        # Find matching category
+        current_url = None
+        for cat in base_categories:
+            if cat['slug'] == parts[0]:
+                current_url = f"{self.BASE_URL}/categories/{cat['slug']}/{cat['id']}"
+                break
+        
+        if not current_url:
+            return []
+        
+        # If path has more parts, navigate deeper
+        if len(parts) > 1:
+            # Build the full path URL by fetching each level
+            current_path = parts[0]
+            for part in parts[1:]:
+                try:
+                    with sync_playwright() as p:
+                        browser = p.chromium.launch(headless=self.headless)
+                        page = browser.new_page()
+                        page.goto(current_url, wait_until="domcontentloaded", timeout=self.timeout)
+                        page.wait_for_timeout(2000)
+                        
+                        # Find subcategory link
+                        sub_url = page.evaluate(f'''
+                            () => {{
+                                const links = document.querySelectorAll('a[href*="/categories/"]');
+                                for (const link of links) {{
+                                    const href = link.getAttribute('href');
+                                    if (href.includes('/{part}/')) {{
+                                        return href.startsWith('http') ? href : 'https://voila.ca' + href;
+                                    }}
+                                }}
+                                return null;
+                            }}
+                        ''')
+                        browser.close()
+                        
+                        if sub_url:
+                            current_url = sub_url.split('?')[0]
+                            current_path += f"/{part}"
+                        else:
+                            break
+                except Exception:
+                    break
+        
+        # Now fetch subcategories from current_url
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=self.headless)
+                context = browser.new_context(user_agent=self.DEFAULT_USER_AGENT)
+                page = context.new_page()
+                
+                page.goto(current_url, wait_until="domcontentloaded", timeout=self.timeout)
+                page.wait_for_timeout(2000)
+                
+                # Extract subcategory links  
+                base_path = '/'.join(parts)
+                subcategories = page.evaluate(f'''
+                    () => {{
+                        const links = document.querySelectorAll('a[href*="/categories/"]');
+                        const seen = new Set();
+                        const results = [];
+                        const basePath = "{base_path}";
+                        
+                        for (const link of links) {{
+                            const href = link.getAttribute('href');
+                            // Match deeper paths
+                            const pattern = new RegExp('/categories/' + basePath + '/([^/]+)/([A-Z0-9]+)');
+                            const match = href.match(pattern);
+                            if (match && !seen.has(match[2])) {{
+                                seen.add(match[2]);
+                                const name = link.textContent?.trim() || match[1].replace(/-/g, ' ');
+                                results.push({{
+                                    name: name,
+                                    slug: match[1],
+                                    id: match[2],
+                                    url: href,
+                                    full_path: basePath + '/' + match[1]
+                                }});
+                            }}
+                        }}
+                        return results;
+                    }}
+                ''')
+                
+                browser.close()
+                return subcategories
+                
+        except Exception as e:
+            raise VoilaBrowserError(f"Erreur récupération sous-catégories: {e}")
+
     def browse_category(
         self, 
         category_slug: str, 
@@ -224,14 +331,24 @@ class ProductSearch:
         Browse products in a category.
         
         Args:
-            category_slug: Category slug (e.g., 'dairy-eggs')
-            category_id: Category ID (e.g., 'WEB1100610')
+            category_slug: Category slug or path (e.g., 'dairy-eggs' or 'dairy-eggs/milk/flavoured-milk')
+            category_id: Category ID (e.g., 'WEB1100610'), can be empty if slug is a full path
             max_results: Maximum products to return
             
         Returns:
             List of products in the category
         """
-        category_url = f"{self.BASE_URL}/categories/{category_slug}/{category_id}"
+        # Handle nested paths like 'dairy-eggs/milk/flavoured-milk'
+        if '/' in category_slug:
+            category_url = f"{self.BASE_URL}/categories/{category_slug}/{category_id}" if category_id else None
+            if not category_url:
+                # Try to resolve the path
+                parts = category_slug.split('/')
+                # Build URL dynamically - we need the ID for each level
+                # For now, just construct the URL and hope it works
+                category_url = f"{self.BASE_URL}/categories/{category_slug}"
+        else:
+            category_url = f"{self.BASE_URL}/categories/{category_slug}/{category_id}"
         
         try:
             with sync_playwright() as p:
