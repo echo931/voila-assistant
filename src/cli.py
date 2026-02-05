@@ -64,26 +64,51 @@ def cmd_search(args):
 
 def cmd_categories(args):
     """Liste les catégories disponibles"""
-    search = ProductSearch(headless=True)
+    from .category_cache import CategoryCache
+    
+    cache = CategoryCache()
     fmt = _get_format(args)
     
-    print("📂 Récupération des catégories...", file=sys.stderr)
-    categories = search.get_categories()
+    # Refresh cache if requested or empty
+    if args.refresh or not cache.categories:
+        depth = getattr(args, 'depth', 2)
+        print(f"📂 Crawling de l'arbre (profondeur {depth})...", file=sys.stderr)
+        
+        def on_progress(msg):
+            print(f"  {msg}", file=sys.stderr)
+        
+        count = cache.refresh(on_progress=on_progress, max_depth=depth)
+        print(f"✅ {count} catégories indexées", file=sys.stderr)
+    
+    if args.tree:
+        # Show full tree
+        print(f"\n📂 Arbre des catégories (màj: {cache.last_updated})\n")
+        print(cache.format_tree())
+        return 0
+    
+    # Flat list
+    all_cats = cache.get_all_flat()
     
     if fmt == "json":
-        print(json.dumps(categories, indent=2, ensure_ascii=False))
+        data = [{"name": c.name, "slug": c.slug, "id": c.id, "path": c.path, "depth": d} 
+                for c, d in all_cats]
+        print(json.dumps(data, indent=2, ensure_ascii=False))
     elif fmt == "telegram":
         lines = ["<b>📂 Catégories Voilà</b>\n"]
-        for cat in categories:
-            lines.append(f"• <b>{cat['name']}</b> ({cat['slug']})")
+        for cat, depth in all_cats:
+            indent = "  " * depth
+            lines.append(f"{indent}• <b>{cat.name}</b>")
         print("\n".join(lines))
     else:
-        print(f"\n{'Catégorie':<35} {'Slug':<30} {'ID'}")
-        print("=" * 80)
-        for cat in categories:
-            print(f"{cat['name']:<35} {cat['slug']:<30} {cat['id']}")
-        print(f"\nTotal: {len(categories)} catégories")
-        print("\n💡 Pour voir les sous-catégories: voila subcategories <slug>")
+        print(f"\n{'Catégorie':<40} {'Chemin':<50} {'ID'}")
+        print("=" * 110)
+        for cat, depth in all_cats:
+            indent = "  " * depth
+            name = f"{indent}{cat.name}"[:40]
+            print(f"{name:<40} {cat.path:<50} {cat.id}")
+        print(f"\nTotal: {len(all_cats)} catégories (màj: {cache.last_updated})")
+        print("\n💡 Rafraîchir: voila categories --refresh")
+        print("💡 Voir l'arbre: voila categories --tree")
     
     return 0
 
@@ -121,31 +146,45 @@ def cmd_subcategories(args):
 
 def cmd_browse(args):
     """Parcourir une catégorie"""
+    from .category_cache import CategoryCache
+    
     search = ProductSearch(headless=True)
     fmt = _get_format(args)
     
     category_slug = args.category
     category_id = args.id
     
-    # Handle nested paths like 'dairy-eggs/milk/flavoured-milk'
-    if '/' in args.category:
-        if not args.id:
-            print(f"❌ Pour les chemins imbriqués, l'ID est requis: --id <ID>")
-            print(f"💡 Utilisez 'voila subcategories {args.category.rsplit('/', 1)[0]}' pour trouver l'ID")
-            return 1
+    # Try to find category in cache first (instant lookup)
+    if not args.id:
+        cache = CategoryCache()
+        if cache.categories:
+            found = cache.find(args.category)
+            if found:
+                category_slug = found.path
+                category_id = found.id
+                print(f"📂 Catégorie: {found.name} ({found.path})", file=sys.stderr)
+            else:
+                print(f"❌ Catégorie non trouvée dans le cache: {args.category}")
+                print("💡 Rafraîchir le cache: voila categories --refresh")
+                return 1
+        else:
+            # No cache, fall back to browser lookup for top-level
+            if '/' in args.category:
+                print(f"❌ Cache vide. Pour les chemins imbriqués, d'abord: voila categories --refresh")
+                return 1
+            
+            print(f"📂 Recherche de la catégorie '{args.category}'...", file=sys.stderr)
+            categories = search.get_categories()
+            matching = [c for c in categories if c['slug'] == args.category or c['name'].lower() == args.category.lower()]
+            if not matching:
+                print(f"❌ Catégorie non trouvée: {args.category}")
+                print("💡 Indexer les catégories: voila categories --refresh")
+                return 1
+            category_slug = matching[0]['slug']
+            category_id = matching[0]['id']
+            print(f"📂 Catégorie: {matching[0]['name']}", file=sys.stderr)
+    else:
         print(f"📂 Catégorie: {args.category}", file=sys.stderr)
-    elif not args.id:
-        # Try to find the ID for top-level categories
-        print(f"📂 Recherche de la catégorie '{args.category}'...", file=sys.stderr)
-        categories = search.get_categories()
-        matching = [c for c in categories if c['slug'] == args.category or c['name'].lower() == args.category.lower()]
-        if not matching:
-            print(f"❌ Catégorie non trouvée: {args.category}")
-            print("Utilisez 'voila categories' pour voir la liste.")
-            return 1
-        category_slug = matching[0]['slug']
-        category_id = matching[0]['id']
-        print(f"📂 Catégorie: {matching[0]['name']}", file=sys.stderr)
     
     print(f"🔍 Chargement des produits...", file=sys.stderr)
     result = search.browse_category_formatted(category_slug, category_id, args.limit, fmt)
@@ -870,8 +909,11 @@ Exemples:
     search_parser.set_defaults(func=cmd_search)
     
     # categories
-    cat_parser = subparsers.add_parser("categories", help="Liste les catégories disponibles")
+    cat_parser = subparsers.add_parser("categories", help="Liste les catégories (depuis cache)")
     cat_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    cat_parser.add_argument("--refresh", action="store_true", help="Recrawler l'arbre (~1-2 min)")
+    cat_parser.add_argument("--tree", action="store_true", help="Afficher en arbre hiérarchique")
+    cat_parser.add_argument("--depth", type=int, default=2, help="Profondeur max de crawl (défaut: 2)")
     cat_parser.set_defaults(func=cmd_categories)
     
     # subcategories
