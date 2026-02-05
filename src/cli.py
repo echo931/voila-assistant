@@ -215,8 +215,33 @@ def cmd_browse(args):
         print(f"📂 Catégorie: {args.category}", file=sys.stderr)
     
     print(f"🔍 Chargement des produits...", file=sys.stderr)
-    result = search.browse_category_formatted(category_slug, category_id, args.limit, fmt)
-    print(result)
+    
+    # Get raw products for sorting
+    products = search.browse_category(category_slug, category_id, args.limit)
+    
+    # Apply sorting if requested
+    sort_key = getattr(args, 'sort', None)
+    if sort_key and products:
+        if sort_key == 'price':
+            products.sort(key=lambda p: p.price if p.price else float('inf'))
+        elif sort_key == 'price-desc':
+            products.sort(key=lambda p: p.price if p.price else float('-inf'), reverse=True)
+        elif sort_key == 'unit-price':
+            products.sort(key=lambda p: p.unit_price if p.unit_price else float('inf'))
+        elif sort_key == 'unit-price-desc':
+            products.sort(key=lambda p: p.unit_price if p.unit_price else float('-inf'), reverse=True)
+        elif sort_key == 'name':
+            products.sort(key=lambda p: p.name.lower())
+        print(f"📊 Trié par: {sort_key}", file=sys.stderr)
+    
+    # Format output
+    if fmt == "json":
+        print(json.dumps([p.to_dict() for p in products], indent=2, ensure_ascii=False))
+    elif fmt == "telegram":
+        print(search._format_telegram(products))
+    else:
+        print(search._format_table(products))
+    
     return 0
 
 
@@ -955,6 +980,8 @@ Exemples:
     browse_parser.add_argument("category", help="Slug ou chemin (ex: dairy-eggs ou dairy-eggs/milk/flavoured-milk)")
     browse_parser.add_argument("--id", help="ID de la catégorie (requis pour chemins profonds)")
     browse_parser.add_argument("-n", "--limit", type=int, default=50, help="Nombre max de résultats (défaut: 50)")
+    browse_parser.add_argument("-s", "--sort", choices=["price", "price-desc", "unit-price", "unit-price-desc", "name"], 
+                              help="Trier les résultats (price=moins cher, unit-price=meilleur rapport)")
     browse_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
     browse_parser.set_defaults(func=cmd_browse)
     
