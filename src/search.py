@@ -249,7 +249,7 @@ class ProductSearch:
                 
                 page.wait_for_timeout(2000)
                 
-                # Extract product data (same as search)
+                # Extract product data (category pages have different structure than search)
                 data = page.evaluate('''
                     () => {
                         const state = window.__INITIAL_STATE__;
@@ -262,18 +262,26 @@ class ProductSearch:
                         
                         for (const [id, product] of Object.entries(entities)) {
                             if (product && product.name) {
+                                // Category pages use different field names than search
+                                const price = product.price?.current?.amount || product.price?.amount || 0;
+                                const unitPrice = product.price?.unit?.current?.amount || product.comparisonPrice?.amount || null;
+                                const unitLabel = product.price?.unit?.label || product.comparisonPrice?.unit || "";
+                                const size = product.size?.value || product.packageSize || "";
+                                const imageUrl = product.image?.src || product.images?.[0]?.url || null;
+                                const inStock = product.available !== false && product.inventoryStatus !== "OUT_OF_STOCK";
+                                
                                 products.push({
-                                    id: id,
+                                    id: product.productId || id,
                                     name: product.name,
                                     brand: product.brand || "",
-                                    price: product.price?.amount || 0,
-                                    unit_price: product.comparisonPrice?.amount || null,
-                                    unit_price_label: product.comparisonPrice?.unit || "",
-                                    size: product.packageSize || "",
-                                    image_url: product.images?.[0]?.url || null,
-                                    in_stock: product.inventoryStatus !== "OUT_OF_STOCK",
-                                    on_sale: product.offers?.length > 0,
-                                    sale_price: product.offers?.[0]?.price?.amount || null
+                                    price: parseFloat(price) || 0,
+                                    unit_price: unitPrice ? parseFloat(unitPrice) : null,
+                                    unit_price_label: unitLabel,
+                                    size: size,
+                                    image_url: imageUrl,
+                                    in_stock: inStock,
+                                    on_sale: !!product.offers?.length || !!product.price?.was,
+                                    sale_price: product.price?.was?.amount ? parseFloat(product.price.was.amount) : null
                                 });
                             }
                         }
@@ -290,21 +298,20 @@ class ProductSearch:
                 products = []
                 for item in data.get("products", [])[:max_results]:
                     try:
+                        from decimal import Decimal
                         product = Product(
                             id=item["id"],
                             name=item["name"],
                             brand=item.get("brand", ""),
-                            price=float(item["price"]) if item["price"] else 0.0,
-                            unit_price=float(item["unit_price"]) if item.get("unit_price") else None,
-                            unit_price_label=item.get("unit_price_label", ""),
+                            price=Decimal(str(item["price"])) if item.get("price") else None,
+                            unit_price=Decimal(str(item["unit_price"])) if item.get("unit_price") else None,
+                            unit_label=item.get("unit_price_label", ""),
                             size=item.get("size", ""),
                             image_url=item.get("image_url"),
-                            in_stock=item.get("in_stock", True),
-                            on_sale=item.get("on_sale", False),
-                            sale_price=float(item["sale_price"]) if item.get("sale_price") else None
+                            available=item.get("in_stock", True),
                         )
                         products.append(product)
-                    except Exception:
+                    except Exception as e:
                         continue
                 
                 return products
