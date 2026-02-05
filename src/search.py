@@ -240,9 +240,12 @@ class ProductSearch:
                 page = context.new_page()
                 
                 try:
-                    page.goto(category_url, wait_until="networkidle", timeout=self.timeout)
+                    page.goto(category_url, wait_until="domcontentloaded", timeout=self.timeout)
                 except PlaywrightTimeout:
                     pass
+                
+                # Wait for products to load
+                page.wait_for_timeout(3000)
                 
                 page.wait_for_timeout(2000)
                 
