@@ -75,6 +75,28 @@ Session cookies stored at `~/.voila-session.json`. Persists cart between runs.
 - Products added show in cart with full names
 - Minimum order: $35 CAD
 
+## Semantic Selection (Important!)
+
+Search results may contain related but different products. **Always read the full product name** to select the right item.
+
+Example - user asks for "pommes de terre pour purée":
+```bash
+uv run ./voila search "pommes de terre" -n 10
+```
+
+Results might include:
+- Russet Potatoes ✅ (good for mash)
+- Yellow Potatoes ✅ (good for mash)  
+- Fingerling Potatoes ❌ (better roasted)
+- Potato Chips ❌ (snack, not vegetable)
+
+**Select based on the user's intent**, not just the first result. Use `-i` to pick the right index:
+```bash
+uv run ./voila add "pommes de terre" -i 3  # Pick the 4th result (index 3)
+```
+
+When in doubt, show the user the options and ask which they prefer.
+
 ## Workflow Example
 
 User: "Ajoute du lait et des bananes au panier"
