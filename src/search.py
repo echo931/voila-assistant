@@ -166,6 +166,167 @@ class ProductSearch:
         
         return "\n".join(lines)
 
+    def get_categories(self) -> List[dict]:
+        """
+        Récupère la liste des catégories disponibles.
+        
+        Returns:
+            Liste de dicts avec 'name', 'slug', 'id', 'url'
+        """
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=self.headless)
+                context = browser.new_context(user_agent=self.DEFAULT_USER_AGENT)
+                page = context.new_page()
+                
+                page.goto(f"{self.BASE_URL}/categories", wait_until="domcontentloaded", timeout=self.timeout)
+                page.wait_for_timeout(2000)
+                
+                # Extract category links
+                categories = page.evaluate('''
+                    () => {
+                        const links = document.querySelectorAll('a[href*="/categories/"]');
+                        const seen = new Set();
+                        const results = [];
+                        
+                        for (const link of links) {
+                            const href = link.getAttribute('href');
+                            // Match /categories/slug/ID pattern
+                            const match = href.match(/\\/categories\\/([^\\/]+)\\/([A-Z0-9]+)/);
+                            if (match && !seen.has(match[2])) {
+                                seen.add(match[2]);
+                                const name = link.textContent?.trim() || match[1].replace(/-/g, ' ');
+                                results.push({
+                                    name: name,
+                                    slug: match[1],
+                                    id: match[2],
+                                    url: href
+                                });
+                            }
+                        }
+                        return results;
+                    }
+                ''')
+                
+                browser.close()
+                return categories
+                
+        except Exception as e:
+            raise VoilaBrowserError(f"Erreur récupération catégories: {e}")
+
+    def browse_category(
+        self, 
+        category_slug: str, 
+        category_id: str, 
+        max_results: int = 20
+    ) -> List[Product]:
+        """
+        Browse products in a category.
+        
+        Args:
+            category_slug: Category slug (e.g., 'dairy-eggs')
+            category_id: Category ID (e.g., 'WEB1100610')
+            max_results: Maximum products to return
+            
+        Returns:
+            List of products in the category
+        """
+        category_url = f"{self.BASE_URL}/categories/{category_slug}/{category_id}"
+        
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=self.headless)
+                context = browser.new_context(user_agent=self.DEFAULT_USER_AGENT)
+                page = context.new_page()
+                
+                try:
+                    page.goto(category_url, wait_until="networkidle", timeout=self.timeout)
+                except PlaywrightTimeout:
+                    pass
+                
+                page.wait_for_timeout(2000)
+                
+                # Extract product data (same as search)
+                data = page.evaluate('''
+                    () => {
+                        const state = window.__INITIAL_STATE__;
+                        if (!state || !state.data || !state.data.products || !state.data.products.productEntities) {
+                            return { error: "No product data found" };
+                        }
+                        
+                        const entities = state.data.products.productEntities;
+                        const products = [];
+                        
+                        for (const [id, product] of Object.entries(entities)) {
+                            if (product && product.name) {
+                                products.push({
+                                    id: id,
+                                    name: product.name,
+                                    brand: product.brand || "",
+                                    price: product.price?.amount || 0,
+                                    unit_price: product.comparisonPrice?.amount || null,
+                                    unit_price_label: product.comparisonPrice?.unit || "",
+                                    size: product.packageSize || "",
+                                    image_url: product.images?.[0]?.url || null,
+                                    in_stock: product.inventoryStatus !== "OUT_OF_STOCK",
+                                    on_sale: product.offers?.length > 0,
+                                    sale_price: product.offers?.[0]?.price?.amount || null
+                                });
+                            }
+                        }
+                        
+                        return { products };
+                    }
+                ''')
+                
+                browser.close()
+                
+                if "error" in data:
+                    return []
+                
+                products = []
+                for item in data.get("products", [])[:max_results]:
+                    try:
+                        product = Product(
+                            id=item["id"],
+                            name=item["name"],
+                            brand=item.get("brand", ""),
+                            price=float(item["price"]) if item["price"] else 0.0,
+                            unit_price=float(item["unit_price"]) if item.get("unit_price") else None,
+                            unit_price_label=item.get("unit_price_label", ""),
+                            size=item.get("size", ""),
+                            image_url=item.get("image_url"),
+                            in_stock=item.get("in_stock", True),
+                            on_sale=item.get("on_sale", False),
+                            sale_price=float(item["sale_price"]) if item.get("sale_price") else None
+                        )
+                        products.append(product)
+                    except Exception:
+                        continue
+                
+                return products
+                
+        except Exception as e:
+            raise VoilaBrowserError(f"Erreur navigation catégorie: {e}")
+
+    def browse_category_formatted(
+        self,
+        category_slug: str,
+        category_id: str,
+        max_results: int = 20,
+        format_type: str = "table"
+    ) -> str:
+        """Browse category and return formatted results."""
+        products = self.browse_category(category_slug, category_id, max_results)
+        
+        if format_type == "json":
+            import json
+            return json.dumps([p.__dict__ for p in products], indent=2, ensure_ascii=False)
+        elif format_type == "telegram":
+            return self._format_telegram(products)
+        else:
+            return self._format_table(products)
+
 
 # CLI pour tests
 def main():

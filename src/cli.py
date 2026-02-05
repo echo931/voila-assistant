@@ -62,6 +62,58 @@ def cmd_search(args):
     return 0
 
 
+def cmd_categories(args):
+    """Liste les catégories disponibles"""
+    search = ProductSearch(headless=True)
+    fmt = _get_format(args)
+    
+    print("📂 Récupération des catégories...", file=sys.stderr)
+    categories = search.get_categories()
+    
+    if fmt == "json":
+        print(json.dumps(categories, indent=2, ensure_ascii=False))
+    elif fmt == "telegram":
+        lines = ["<b>📂 Catégories Voilà</b>\n"]
+        for cat in categories:
+            lines.append(f"• <b>{cat['name']}</b> ({cat['slug']})")
+        print("\n".join(lines))
+    else:
+        print(f"\n{'Catégorie':<35} {'Slug':<30} {'ID'}")
+        print("=" * 80)
+        for cat in categories:
+            print(f"{cat['name']:<35} {cat['slug']:<30} {cat['id']}")
+        print(f"\nTotal: {len(categories)} catégories")
+    
+    return 0
+
+
+def cmd_browse(args):
+    """Parcourir une catégorie"""
+    search = ProductSearch(headless=True)
+    fmt = _get_format(args)
+    
+    # If only slug given, try to find the ID
+    if not args.id:
+        print(f"📂 Recherche de la catégorie '{args.category}'...", file=sys.stderr)
+        categories = search.get_categories()
+        matching = [c for c in categories if c['slug'] == args.category or c['name'].lower() == args.category.lower()]
+        if not matching:
+            print(f"❌ Catégorie non trouvée: {args.category}")
+            print("Utilisez 'voila categories' pour voir la liste.")
+            return 1
+        category_slug = matching[0]['slug']
+        category_id = matching[0]['id']
+        print(f"📂 Catégorie: {matching[0]['name']}", file=sys.stderr)
+    else:
+        category_slug = args.category
+        category_id = args.id
+    
+    print(f"🔍 Chargement des produits...", file=sys.stderr)
+    result = search.browse_category_formatted(category_slug, category_id, args.limit, fmt)
+    print(result)
+    return 0
+
+
 def cmd_cart(args):
     """Affiche le panier"""
     fmt = _get_format(args)
@@ -777,6 +829,19 @@ Exemples:
     search_parser.add_argument("--sales", action="store_true", help="Afficher seulement les produits en solde")
     search_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
     search_parser.set_defaults(func=cmd_search)
+    
+    # categories
+    cat_parser = subparsers.add_parser("categories", help="Liste les catégories disponibles")
+    cat_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    cat_parser.set_defaults(func=cmd_categories)
+    
+    # browse
+    browse_parser = subparsers.add_parser("browse", help="Parcourir une catégorie")
+    browse_parser.add_argument("category", help="Nom ou slug de la catégorie (ex: dairy-eggs)")
+    browse_parser.add_argument("--id", help="ID de la catégorie (optionnel si slug connu)")
+    browse_parser.add_argument("-n", "--limit", type=int, default=20, help="Nombre max de résultats")
+    browse_parser.add_argument("-f", "--format", choices=["table", "telegram", "json"], default=None)
+    browse_parser.set_defaults(func=cmd_browse)
     
     # cart
     cart_parser = subparsers.add_parser("cart", help="Affiche le panier")
